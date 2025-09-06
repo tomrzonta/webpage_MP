@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Setor {{ sector_name }}</title>
+    <style>
+        /* --- Estilos Gerais (Modo Claro Padrão) --- */
+        :root {
+            --bg-color: #f4f4f9;
+            --container-bg-color: #ffffff;
+            --text-color: #333;
+            --link-color: #007bff;
+            --button-bg-color: #28a745;
+            --button-hover-bg-color: #218838;
+            --dropdown-bg-color: #f9f9f9;
+            --dropdown-hover-bg-color: #f1f1f1;
+            --dropdown-text-color: #000;
+        }
+
+        body {
+            font-family: sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 90%; /* Aumentado para melhor layout horizontal */
+            margin: auto;
+            background: var(--container-bg-color);
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-info {
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        #theme-toggle {
+            background: none;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 5px 8px;
+        }
+        
+        h1 { text-align: center; }
+
+        /* --- Layout Horizontal para os Menus --- */
+        .menu-bar {
+            display: flex;
+            flex-wrap: wrap; /* Permite que os botões quebrem a linha em telas pequenas */
+            justify-content: center;
+            gap: 15px; /* Espaçamento entre os menus */
+            margin-top: 30px;
+        }
+        
+        /* --- Estilos do Menu Suspenso --- */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-button {
+            background-color: var(--button-bg-color);
+            color: white;
+            padding: 15px 30px;
+            font-size: 1em;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: var(--dropdown-bg-color);
+            min-width: 100%;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+        }
+
+        .dropdown-content a {
+            color: var(--dropdown-text-color);
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dropdown-content a:hover { background-color: var(--dropdown-hover-bg-color); }
+        .dropdown:hover .dropdown-content { display: block; }
+        .dropdown:hover .dropdown-button { background-color: var(--button-hover-bg-color); }
+
+        /* --- Estilos do Modo Escuro --- */
+        body.dark-mode {
+            --bg-color: #121212;
+            --container-bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --link-color: #bb86fc;
+            --button-bg-color: #03dac6;
+            --button-hover-bg-color: #018786;
+            --dropdown-bg-color: #333;
+            --dropdown-hover-bg-color: #444;
+            --dropdown-text-color: #e0e0e0;
+        }
+
+        body.dark-mode #theme-toggle { border-color: #555; }
+        body.dark-mode .user-info { color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="user-info">
+                Olá, {{ current_user.email }}! <a href="{{ url_for('logout') }}">Sair</a>
+            </div>
+            <button id="theme-toggle">🌙</button>
+        </div>
+
+        <h1>Setor: {{ sector_name }}</h1>
+
+        <div class="menu-bar">
+            {% for subcategory_name, planilhas in subcategories.items() %}
+                <div class="dropdown">
+                    <button class="dropdown-button">{{ subcategory_name }}</button>
+                    <div class="dropdown-content">
+                        {% for key, dados in planilhas.items() %}
+                            <a href="{{ dados.url }}" target="_blank">{{ dados.nome }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+
+        // Função para aplicar o tema salvo
+        const applyTheme = (theme) => {
+            if (theme === 'dark') {
+                body.classList.add('dark-mode');
+                themeToggle.textContent = '☀️';
+            } else {
+                body.classList.remove('dark-mode');
+                themeToggle.textContent = '🌙';
+            }
+        };
+
+        // Verifica se há um tema salvo no localStorage ao carregar a página
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        applyTheme(savedTheme);
+
+        // Evento de clique para alternar o tema
+        themeToggle.addEventListener('click', () => {
+            let newTheme = 'light';
+            if (!body.classList.contains('dark-mode')) {
+                newTheme = 'dark';
+            }
+            // Salva a nova preferência no localStorage
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
+        });
+    </script>
+</body>
+</html>
