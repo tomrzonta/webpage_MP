@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - {{ current_sector.name }}</title>
+    <style>
+        /* CSS não precisa de alterações, código omitido por brevidade */
+        :root { --bg-color: #f4f4f9; --sidebar-bg: #ffffff; --header-bg: #ffffff; --main-content-bg: #ffffff; --text-color: #333; --link-color: #007bff; --active-link-bg: #007bff; --active-link-text: #ffffff; --border-color: #e9ecef; }
+        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        .header { background-color: var(--header-bg); padding: 0 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; height: 60px; flex-shrink: 0; }
+        .header-left { font-weight: bold; }
+        .header-right { display: flex; align-items: center; gap: 20px; }
+        .sector-dropdown { position: relative; display: inline-block; }
+        .sector-dropdown button { background-color: #6c757d; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
+        .sector-dropdown-content { display: none; position: absolute; background-color: #fff; min-width: 160px; box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2); z-index: 1; border-radius: 4px; }
+        .sector-dropdown-content a { color: black; padding: 12px 16px; text-decoration: none; display: block; }
+        .sector-dropdown-content a:hover { background-color: #f1f1f1; }
+        .sector-dropdown:hover .sector-dropdown-content { display: block; }
+        .page-container { display: flex; flex-grow: 1; overflow: hidden; }
+        .sidebar { background-color: var(--sidebar-bg); width: 250px; padding: 20px; border-right: 1px solid var(--border-color); flex-shrink: 0; overflow-y: auto; }
+        .sidebar h3 { margin-top: 0; }
+        .sidebar ul { list-style: none; padding: 0; }
+        .sidebar ul li a { display: block; padding: 10px 15px; text-decoration: none; color: var(--link-color); border-radius: 4px; margin-bottom: 5px; }
+        .sidebar ul li a:hover { background-color: #f0f0f0; }
+        .sidebar ul li a.active { background-color: var(--active-link-bg); color: var(--active-link-text); }
+        .main-content { background-color: var(--main-content-bg); padding: 30px; flex-grow: 1; overflow-y: auto; }
+        .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .link-card { display: block; padding: 20px; background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 5px; text-decoration: none; color: var(--text-color); transition: transform 0.2s, box-shadow 0.2s; }
+        .link-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            Portal de Links: <strong>{{ current_sector.name }}</strong>
+        </div>
+        <div class="header-right">
+            <div class="sector-dropdown">
+                <button>Mudar Setor ▼</button>
+                <div class="sector-dropdown-content">
+                    {% for sector in all_sectors %}
+                        {% if sector.name != current_sector.name %}
+                            <a href="{{ url_for('view_sector_dashboard', sector_name=sector.name) }}">{{ sector.name }}</a>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="user-info">
+                {{ current_user.email }} | <a href="{{ url_for('logout') }}">Sair</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-container">
+        <aside class="sidebar">
+            <h3>Categorias</h3>
+            <ul>
+                {% for subcategory in subcategories %}
+                    <li>
+                        <a href="{{ url_for('view_sector_dashboard', sector_name=current_sector.name, view=subcategory.name) }}" 
+                           class="{{ 'active' if subcategory.name == active_subcategory_name else '' }}">
+                            {{ subcategory.name }}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            {% if links_to_show %}
+                <h2>{{ active_subcategory_name }}</h2>
+                <div class="link-grid">
+                    {% for link in links_to_show %}
+                        <a href="{{ link.url }}" target="_blank" class="link-card">
+                            <h4>{{ link.name }}</h4>
+                            <p>Clique para abrir o documento.</p>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <h2>Bem-vindo!</h2>
+                <p>Selecione uma categoria no menu à esquerda para visualizar os links.</p>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

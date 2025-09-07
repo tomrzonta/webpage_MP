@@ -1,55 +1,15 @@
 import os
+import click
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
+from flask_admin import Admin
+from flask_admin.contrib.sqla import ModelView
 
-# --- MAPA DE PLANILHAS COM SUBCATEGORIAS ---
-# Estrutura: Setor -> Subcategoria -> Planilha
-PLANILHAS_POR_SETOR = {
-    'Suporte': {
-        'Documentação Técnica': {
-            'integracao_totvs': {
-                'nome': 'Integração TOTVS',
-                'url': 'https://docs.google.com/document/d/1A_xGBWtiT8jyXCZUJMJE5sw5K3luFaS5s_A01G4v570/edit?tab=t.0'
-            },
-            'teste': {
-                'nome': 'teste novo',
-                'url': 'https://discord.com/channels/689989595617820716/1390364328309424288/1390373488476295280'
-            }
-        },
-        'Acompanhamento Pix': {
-            'acompanhamento pix': {
-                'nome': 'Acompanhamento Pix',
-                'url': 'https://docs.google.com/spreadsheets/d/1c_ANia5o319L314nt24TpRqBIlr7V6ps7omL6sGqK8U/edit?gid=726468821#gid=726468821'
-            }
-        }
-    },
-    'Vendas': {
-        'Geral': {
-            'vendas_q3': {
-                'nome': 'Relatório de Vendas Q3',
-                'url': 'URL_DA_SUA_PLANILHA_DE_VENDAS_AQUI'
-            },
-            'metas_vendedores': {
-                'nome': 'Metas por Vendedor',
-                'url': 'URL_DA_SUA_OUTRA_PLANILHA_DE_VENDAS_AQUI'
-            }
-        }
-    },
-    'CS': {
-        'Geral': {
-            'health_score': {
-                'nome': 'Health Score Clientes',
-                'url': 'URL_DA_SUA_PLANILHA_DE_CS_AQUI'
-            }
-        }
-    }
-}
-
-
-# --- CONFIGURAÇÃO INICIAL DA APLICAÇÃO ---
+# --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
 app = Flask(__name__)
+# ... (resto da configuração sem mudanças)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -62,95 +22,167 @@ login_manager.login_view = 'login'
 login_manager.login_message_category = 'info'
 login_manager.login_message = 'Por favor, faça login para acessar esta página.'
 
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
-# --- MODELO DE USUÁRIO (BANCO DE DADOS) ---
+# --- MODELOS DO BANCO DE DADOS ---
+# ... (nenhuma mudança nos modelos)
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
-    sector = db.Column(db.String(50), nullable=False)
+    sector_name = db.Column(db.String(50), nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+
+class Sector(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    subcategories = db.relationship('Subcategory', back_populates='sector', lazy=True, cascade="all, delete-orphan")
+    def __str__(self):
+        return self.name
+
+class Subcategory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
+    sector = db.relationship('Sector', back_populates='subcategories')
+    links = db.relationship('Link', back_populates='subcategory', lazy=True, cascade="all, delete-orphan")
+    def __str__(self):
+        return self.name
+
+class Link(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategory.id'), nullable=False)
+    subcategory = db.relationship('Subcategory', back_populates='links')
+    def __str__(self):
+        return self.name
+
+# --- CONFIGURAÇÃO DO PAINEL ADMIN SEGURO (COM CUSTOMIZAÇÕES) ---
+from flask_admin.model.form import InlineFormAdmin
+from flask_admin.model.fields import InlineFormField, InlineFieldList
+from flask_admin.form import form
+from flask_admin.form.fields import Select2Field
+from sqlalchemy.orm import backref
+
+class AdminView(ModelView):
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_admin
+    def inaccessible_callback(self, name, **kwargs):
+        flash('Você precisa ser um administrador para acessar esta página.', 'danger')
+        return redirect(url_for('login'))
+
+class SubcategoryAdminView(AdminView):
+    form_columns = ['name', 'sector']
+    # ADICIONAMOS ESTA LINHA PARA SIMPLIFICAR O FORMULÁRIO
+    form_ajax_refs = {
+        'sector': {
+            'fields': ['name']
+        }
+    }
+
+class LinkAdminView(AdminView):
+    column_list = ['name', 'url', 'subcategory']
+    form_columns = ['name', 'url', 'subcategory']
+    # ADICIONAMOS ESTA LINHA PARA SIMPLIFICAR O FORMULÁRIO
+    form_ajax_refs = {
+        'subcategory': {
+            'fields': ['name']
+        }
+    }
 
 
-# --- ROTAS DE AUTENTICAÇÃO ---
+admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
+
+admin.add_view(AdminView(Sector, db.session, name='Setores'))
+admin.add_view(SubcategoryAdminView(Subcategory, db.session, name='Subcategorias'))
+admin.add_view(LinkAdminView(Link, db.session, name='Links'))
+
+# --- ROTAS E COMANDOS ---
+# ... (nenhuma outra mudança no resto do arquivo)
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         user = User.query.filter_by(email=request.form.get('email')).first()
         if user and bcrypt.check_password_hash(user.password_hash, request.form.get('password')):
             login_user(user)
-            return redirect(url_for('index'))
+            return redirect(url_for('dashboard'))
         else:
-            flash('Login sem sucesso. Por favor, verifique o e-mail e a senha.', 'danger')
+            flash('Login sem sucesso. Verifique e-mail e senha.', 'danger')
     return render_template('login.html', title='Login')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         hashed_password = bcrypt.generate_password_hash(request.form.get('password')).decode('utf-8')
-        user = User(
-            email=request.form.get('email'),
-            password_hash=hashed_password,
-            sector=request.form.get('sector')
-        )
+        user = User(email=request.form.get('email'), password_hash=hashed_password, sector_name=request.form.get('sector'), is_admin=False)
         db.session.add(user)
         db.session.commit()
         flash('Sua conta foi criada! Você já pode fazer login.', 'success')
         return redirect(url_for('login'))
-    # Passa apenas os nomes dos setores para o template de registro
-    return render_template('register.html', title='Registrar', sectors=PLANILHAS_POR_SETOR.keys())
+    sectors = Sector.query.all()
+    return render_template('register.html', title='Registrar', sectors=sectors)
 
 @app.route('/logout')
 def logout():
     logout_user()
     return redirect(url_for('login'))
 
-
-# --- NOVAS ROTAS DE NAVEGAÇÃO (SIMPLIFICADO) ---
 @app.route('/')
 @login_required
-def index():
-    """Redireciona o usuário logado para a página do seu setor."""
-    user_sector = current_user.sector
-    return redirect(url_for('view_sector', sector_name=user_sector))
+def dashboard():
+    user_sector = current_user.sector_name
+    return redirect(url_for('view_sector_dashboard', sector_name=user_sector))
 
 @app.route('/setor/<sector_name>')
 @login_required
-def view_sector(sector_name):
-    """Mostra a página de um setor com os menus suspensos para cada subcategoria."""
-    if sector_name != current_user.sector:
+def view_sector_dashboard(sector_name):
+    all_sectors = Sector.query.all()
+    current_sector = Sector.query.filter_by(name=sector_name).first_or_404()
+    if not current_user.is_admin and current_sector.name != current_user.sector_name:
         flash('Você não tem permissão para acessar este setor.', 'danger')
-        return redirect(url_for('view_sector', sector_name=current_user.sector))
-    
-    # Pega todos os dados do setor (incluindo subcategorias e planilhas)
-    sector_data = PLANILHAS_POR_SETOR.get(sector_name, {})
-    
-    # Envia o dicionário completo para o template
-    return render_template('sector_page.html', sector_name=sector_name, subcategories=sector_data)
+        return redirect(url_for('dashboard'))
+    subcategories_for_sidebar = current_sector.subcategories
+    active_subcategory_name = request.args.get('view', None)
+    links_to_show = []
+    if active_subcategory_name:
+        for sub in subcategories_for_sidebar:
+            if sub.name == active_subcategory_name:
+                links_to_show = sub.links
+                break
+    return render_template('dashboard.html',
+                           all_sectors=all_sectors,
+                           current_sector=current_sector,
+                           subcategories=subcategories_for_sidebar,
+                           active_subcategory_name=active_subcategory_name,
+                           links_to_show=links_to_show)
 
-# A ROTA view_subcategory FOI REMOVIDA
-
-@app.route('/setor/<sector_name>/<subcategory_name>')
-@login_required
-def view_subcategory(subcategory_name, sector_name):
-    """Mostra os links finais de uma subcategoria."""
-    if sector_name != current_user.sector:
-        flash('Você não tem permissão para acessar este setor.', 'danger')
-        return redirect(url_for('view_sector', sector_name=current_user.sector))
+@app.cli.command('create-admin')
+@click.option('--email', prompt=True, help='O e-mail do administrador.')
+@click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True, help='A senha do administrador.')
+def create_admin_command(email, password):
+    """Cria um novo usuário administrador."""
+    if User.query.filter_by(email=email).first():
+        print(f'Erro: O e-mail {email} já existe.')
+        return
+    
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    admin_sector = Sector.query.first()
+    if not admin_sector:
+        print('Erro: Crie ao menos um setor antes de criar um admin. Rode "flask populate-db" primeiro.')
+        return
         
-    sector_data = PLANILHAS_POR_SETOR.get(sector_name, {})
-    planilhas_data = sector_data.get(subcategory_name, {})
-    
-    return render_template('subcategory_page.html', 
-                           sector_name=sector_name, 
-                           subcategory_name=subcategory_name, 
-                           planilhas=planilhas_data)
+    admin = User(email=email, password_hash=hashed_password, sector_name=admin_sector.name, is_admin=True)
+    db.session.add(admin)
+    db.session.commit()
+    print(f'Administrador {email} criado com sucesso!')
 
-# --- EXECUÇÃO DA APLICAÇÃO ---
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.cli.command('populate-db')
+def populate_db_command():
+    pass # Desativado
