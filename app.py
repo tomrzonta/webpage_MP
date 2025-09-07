@@ -108,6 +108,7 @@ admin.add_view(SubcategoryAdminView(Subcategory, db.session, name='Subcategorias
 admin.add_view(LinkAdminView(Link, db.session, name='Links'))
 admin.add_link(MenuLink(name='Voltar para a Aplicação', category='', url='/'))
 
+
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -159,34 +160,46 @@ def dashboard():
 @app.route('/setor/<sector_name>')
 @login_required
 def view_sector_dashboard(sector_name):
-    all_sectors_for_dropdown = Sector.query.all()
+    # Para o menu suspenso, admins veem todos os setores, usuários normais veem apenas os seus.
+    sectors_for_dropdown = Sector.query.all() if current_user.is_admin else current_user.sectors
+
     current_sector = Sector.query.filter_by(name=sector_name).first_or_404()
+
+    # Validação de segurança
     if not current_user.is_admin and current_sector not in current_user.sectors:
         flash('Você não tem permissão para acessar este setor.', 'danger')
         return redirect(url_for('dashboard'))
+
     subcategories_for_sidebar = current_sector.subcategories
     active_subcategory_name = request.args.get('view', None)
     search_term = request.args.get('search', None)
     links_to_show = []
+    
     if search_term:
         active_subcategory_name = None
         query = db.session.query(Link).join(Subcategory).join(Sector)
+        
+        # Garante que a busca respeite as permissões do usuário
+        user_accessible_sectors_ids = [s.id for s in current_user.sectors]
         if not current_user.is_admin:
-            user_sector_ids = [s.id for s in current_user.sectors]
-            query = query.filter(Sector.id.in_(user_sector_ids))
+            query = query.filter(Sector.id.in_(user_accessible_sectors_ids))
+            
         links_to_show = query.filter(Link.name.ilike(f'%{search_term}%')).all()
+    
     elif active_subcategory_name:
         for sub in subcategories_for_sidebar:
             if sub.name == active_subcategory_name:
                 links_to_show = sub.links
                 break
+
     return render_template('dashboard.html',
-                           all_sectors=all_sectors_for_dropdown,
+                           sectors_for_dropdown=sectors_for_dropdown,
                            current_sector=current_sector,
                            subcategories=subcategories_for_sidebar,
                            active_subcategory_name=active_subcategory_name,
                            links_to_show=links_to_show,
                            search_term=search_term)
+
 
 # --- COMANDOS CLI ---
 @app.cli.command('create-admin')
@@ -209,7 +222,6 @@ def create_admin_command(email, password):
 @app.cli.command('create-sector')
 @click.argument('name')
 def create_sector_command(name):
-    """Cria um novo setor no banco de dados."""
     if Sector.query.filter_by(name=name).first():
         print(f"Erro: O setor '{name}' já existe.")
         return
@@ -217,51 +229,26 @@ def create_sector_command(name):
     db.session.add(new_sector)
     db.session.commit()
     print(f"Setor '{name}' criado com sucesso!")
-    
+
 @app.cli.command('assign-sector')
 @click.argument('email')
 @click.argument('sector_name')
 def assign_sector_command(email, sector_name):
-    """Associa um setor a um usuário existente."""
     user = User.query.filter_by(email=email).first()
     if not user:
         print(f"Erro: Usuário com e-mail '{email}' não encontrado.")
         return
-
     sector = Sector.query.filter_by(name=sector_name).first()
     if not sector:
         print(f"Erro: Setor com nome '{sector_name}' não encontrado.")
         return
-
     if sector in user.sectors:
         print(f"Aviso: O usuário '{email}' já tem acesso ao setor '{sector_name}'.")
         return
-
     user.sectors.append(sector)
     db.session.commit()
     print(f"Sucesso! Setor '{sector_name}' associado ao usuário '{email}'.")
 
 @app.cli.command('populate-db')
 def populate_db_command():
-    """Lê um dicionário interno e popula as tabelas de setores, subcategorias e links."""
-    PLANILHAS_POR_SETOR = {
-        'Suporte': {
-            'Documentação Técnica': { 'integracao_totvs': {'nome': 'Integração TOTVS', 'url': 'https://docs.google.com/document/d/1A_xGBWtiT8jyXCZUJMJE5sw5K3luFaS5s_A01G4v570/edit?tab=t.0'}, 'integracao_ifood': {'nome': 'Integração Ifood', 'url': 'https://docs.google.com/document/d/1q9Y4eXMrgK8vmnfjy6oIzjmcytCPl1OLs9tQ8Xi_ALU/edit?tab=t.0#heading=h.gfrmxwlev7cw'} },
-            'Acompanhamento Pix': { 'pix_diario': {'nome': 'Controle PIX Diário', 'url': 'URL_AQUI'} }
-        },
-        'Vendas': { 'Geral': { 'vendas_q3': {'nome': 'Relatório de Vendas Q3', 'url': 'URL_AQUI'} } }
-    }
-    db.session.query(Link).delete()
-    db.session.query(Subcategory).delete()
-    db.session.query(Sector).delete()
-    for sector_name, subcategories in PLANILHAS_POR_SETOR.items():
-        new_sector = Sector(name=sector_name)
-        db.session.add(new_sector)
-        for subcategory_name, links in subcategories.items():
-            new_subcategory = Subcategory(name=subcategory_name, sector=new_sector)
-            db.session.add(new_subcategory)
-            for link_key, link_data in links.items():
-                new_link = Link(name=link_data['nome'], url=link_data['url'], subcategory=new_subcategory)
-                db.session.add(new_link)
-    db.session.commit()
-    print('Banco de dados populado com setores e links iniciais!')
+    pass # Desativado
