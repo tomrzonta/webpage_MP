@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Sem Acesso</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; text-align: center; background-color: #f4f4f9; }
+        .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .user-info { position: absolute; top: 20px; right: 20px; }
+    </style>
+</head>
+<body>
+    <div class="user-info">
+        Olá, {{ current_user.email }}! <a href="{{ url_for('logout') }}">Sair</a>
+    </div>
+    <div class="container">
+        <h1>Acesso a Setores</h1>
+        <p>Você ainda não foi associado a nenhum setor.</p>
+        <p>Por favor, entre em contato com um administrador para solicitar seu acesso.</p>
+    </div>
+</body>
+</html>

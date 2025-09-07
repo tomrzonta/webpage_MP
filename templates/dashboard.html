@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <title>Dashboard - {{ current_sector.name }}</title>
     <style>
-        /* CSS não precisa de alterações, código omitido por brevidade */
         :root { --bg-color: #f4f4f9; --sidebar-bg: #ffffff; --header-bg: #ffffff; --main-content-bg: #ffffff; --text-color: #333; --link-color: #007bff; --active-link-bg: #007bff; --active-link-text: #ffffff; --border-color: #e9ecef; }
         body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         .header { background-color: var(--header-bg); padding: 0 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; height: 60px; flex-shrink: 0; }
         .header-left { font-weight: bold; }
-        .header-right { display: flex; align-items: center; gap: 20px; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
         .sector-dropdown { position: relative; display: inline-block; }
-        .sector-dropdown button { background-color: #6c757d; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
-        .sector-dropdown-content { display: none; position: absolute; background-color: #fff; min-width: 160px; box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2); z-index: 1; border-radius: 4px; }
+        .sector-dropdown button, .admin-button { background-color: #6c757d; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; }
+        .sector-dropdown-content { display: none; position: absolute; right: 0; background-color: #fff; min-width: 160px; box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2); z-index: 1; border-radius: 4px; }
         .sector-dropdown-content a { color: black; padding: 12px 16px; text-decoration: none; display: block; }
         .sector-dropdown-content a:hover { background-color: #f1f1f1; }
         .sector-dropdown:hover .sector-dropdown-content { display: block; }
@@ -24,9 +23,13 @@
         .sidebar ul li a:hover { background-color: #f0f0f0; }
         .sidebar ul li a.active { background-color: var(--active-link-bg); color: var(--active-link-text); }
         .main-content { background-color: var(--main-content-bg); padding: 30px; flex-grow: 1; overflow-y: auto; }
-        .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .link-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
         .link-card { display: block; padding: 20px; background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 5px; text-decoration: none; color: var(--text-color); transition: transform 0.2s, box-shadow 0.2s; }
         .link-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        /* ESTILOS PARA A BARRA DE BUSCA */
+        .search-form { display: flex; gap: 10px; margin-bottom: 30px; }
+        .search-form input { flex-grow: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .search-form button { padding: 10px 15px; border: none; background-color: var(--link-color); color: white; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -35,6 +38,7 @@
             Portal de Links: <strong>{{ current_sector.name }}</strong>
         </div>
         <div class="header-right">
+            {% if current_user.is_admin %}
             <div class="sector-dropdown">
                 <button>Mudar Setor ▼</button>
                 <div class="sector-dropdown-content">
@@ -45,12 +49,13 @@
                     {% endfor %}
                 </div>
             </div>
+            <a href="{{ url_for('admin.index') }}" class="admin-button">Painel Admin</a>
+            {% endif %}
             <div class="user-info">
                 {{ current_user.email }} | <a href="{{ url_for('logout') }}">Sair</a>
             </div>
         </div>
     </header>
-
     <div class="page-container">
         <aside class="sidebar">
             <h3>Categorias</h3>
@@ -65,10 +70,22 @@
                 {% endfor %}
             </ul>
         </aside>
-
         <main class="main-content">
-            {% if links_to_show %}
+            <form method="GET" action="{{ url_for('view_sector_dashboard', sector_name=current_sector.name) }}" class="search-form">
+                <input type="search" name="search" placeholder="Buscar em {{ 'todos os setores' if current_user.is_admin else 'seu setor' }}..." value="{{ search_term or '' }}">
+                <button type="submit">Buscar</button>
+            </form>
+
+            {% if search_term %}
+                <h2>Resultados da busca por: "{{ search_term }}"</h2>
+            {% elif active_subcategory_name %}
                 <h2>{{ active_subcategory_name }}</h2>
+            {% else %}
+                <h2>Bem-vindo!</h2>
+                <p>Selecione uma categoria no menu à esquerda ou faça uma busca.</p>
+            {% endif %}
+
+            {% if links_to_show %}
                 <div class="link-grid">
                     {% for link in links_to_show %}
                         <a href="{{ link.url }}" target="_blank" class="link-card">
@@ -77,9 +94,8 @@
                         </a>
                     {% endfor %}
                 </div>
-            {% else %}
-                <h2>Bem-vindo!</h2>
-                <p>Selecione uma categoria no menu à esquerda para visualizar os links.</p>
+            {% elif search_term %}
+                <p>Nenhum link encontrado com o termo buscado.</p>
             {% endif %}
         </main>
     </div>
