@@ -162,18 +162,15 @@ def api_subcategories(sector_id):
 @app.route('/api/links/reorder', methods=['POST'])
 @login_required
 def reorder_links():
-    # Garante que apenas administradores possam reordenar
     if not current_user.is_admin:
         return jsonify({'status': 'error', 'message': 'Permission denied'}), 403
 
-    # Pega a lista de IDs na nova ordem enviada pelo JavaScript
     ordered_ids = request.get_json().get('ordered_ids')
 
     if not ordered_ids:
         return jsonify({'status': 'error', 'message': 'No data received'}), 400
 
     try:
-        # Atualiza o order_index de cada link baseado na sua posição na lista
         for index, link_id in enumerate(ordered_ids):
             link = db.session.get(Link, int(link_id))
             if link:
@@ -206,24 +203,36 @@ class LinkForm(FlaskForm):
     )
 
 
-# NO SEU app.py
 class LinkAdminView(SecureModelView):
     # Usa nosso formulário customizado
     form = LinkForm
-
-    # Aponta para os templates de criação/edição que já funcionam
+    
+    # Aponta para os templates de criação/edição/lista
     create_template = 'admin/link_create.html'
     edit_template = 'admin/link_edit.html'
+    list_template = 'admin/link_list.html'
+    
+    # Ordenação padrão da lista
+    column_default_sort = ('order_index', False)
 
-    # Define as colunas que aparecem na lista
+    # NOVO: Define um nome amigável para a coluna. Esta é a forma correta.
+    column_labels = {'order_index': 'Ordem'}
+
+    # Função para criar o HTML do ícone de arrastar
+    def _order_formatter(view, context, model, name):
+        # O ícone 'hamburger' (☰) serve como a alça visual
+        return Markup(f'<div class="drag-handle" style="cursor: move; text-align: center;" data-id="{model.id}">&#9776;</div>')
+
+    # Diz ao Admin para usar nossa função para formatar a coluna 'order_index'
+    column_formatters = {
+        'order_index': _order_formatter
+    }
+
+    # AJUSTADO: Usa o nome simples da coluna na lista
     column_list = ['order_index', 'name', 'url', 'subcategory']
-
-    # Define a ordenação padrão da lista
-    column_default_sort = ('order_index', False) # False = menor para o maior
-
-    # Torna a coluna 'order_index' editável diretamente na tela de lista
-    column_editable_list = ['order_index']
-    form_columns = ['sector', 'name', 'url', 'subcategory', 'order_index']
+    
+    # Especifica quais campos aparecem no formulário de edição/criação
+    form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
 admin.add_view(UserAdminView(User, db.session, name='Usuários'))
