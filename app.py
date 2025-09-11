@@ -234,6 +234,18 @@ class LinkAdminView(SecureModelView):
     # Especifica quais campos aparecem no formulário de edição/criação
     form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
+    # Adiciona um painel de filtros na lateral da lista
+    column_filters = [
+        # Filtro baseado no relacionamento com Subcategoria e depois com Setor
+        'subcategory.sector', 
+        
+        # Filtro baseado diretamente no relacionamento com Subcategoria
+        'subcategory'
+    ]
+    # --- FIM DO BLOCO ---
+
+    form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
+
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
 admin.add_view(UserAdminView(User, db.session, name='Usuários'))
 admin.add_view(SectorAdminView(Sector, db.session, name='Setores'))
