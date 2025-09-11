@@ -1,0 +1,58 @@
+{% extends 'admin/model/list.html' %}
+
+{% block body %}
+    {{ super() }} {# Renderiza a tabela padrão do Admin #}
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableBody = document.querySelector('.table tbody');
+            
+            if (tableBody) {
+                const rows = tableBody.querySelectorAll('tr');
+                
+                // Pega a lista de dados que o Flask-Admin passa para o template
+                const list_data = {{ admin_view.get_list_value(None, data)[1]|tojson }};
+                
+                // Adiciona o data-id em cada linha usando o ID correto
+                rows.forEach((row, index) => {
+                    if (list_data[index]) {
+                        // Usamos o ID que vem direto do backend
+                        const linkId = list_data[index][0]; // O ID geralmente é o primeiro item
+                        row.dataset.id = linkId;
+                    }
+                });
+
+                new Sortable(tableBody, {
+                    animation: 150,
+                    handle: '.drag-handle',
+                    onEnd: function (evt) {
+                        const allRows = tableBody.querySelectorAll('tr');
+                        const orderedIds = Array.from(allRows).map(row => row.dataset.id).filter(id => id);
+                        
+                        // O resto da função fetch continua igual...
+                        fetch('{{ url_for("reorder_links") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ordered_ids: orderedIds }),
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('Ordem salva com sucesso!');
+                                location.reload(); // Recarrega a página para ver a nova ordem salva
+                            } else {
+                                alert('ERRO ao salvar a ordem: ' + data.message);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('Erro de rede:', error);
+                            alert('ERRO de rede. Verifique o console para mais detalhes.');
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+{% endblock %}

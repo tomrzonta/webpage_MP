@@ -13,6 +13,8 @@ from wtforms import StringField, SelectField
 from wtforms.validators import DataRequired
 from wtforms.fields import PasswordField
 from flask_admin.actions import action
+from markupsafe import Markup
+from wtforms import StringField, IntegerField
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
@@ -73,6 +75,7 @@ class Link(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500), nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0) # <-- ADICIONE ESTA LINHA
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategory.id'), nullable=False)
     subcategory = db.relationship('Subcategory', back_populates='links')
     def __str__(self):
@@ -138,6 +141,9 @@ class SectorAdminView(SecureModelView):
     column_list = ['name', 'subcategories']
     column_searchable_list = ['name']
 
+    # Adicione esta linha para limitar o formulário
+    form_columns = ['name']
+
 class SubcategoryAdminView(SecureModelView):
     form_columns = ['name', 'sector']
 #    form_ajax_refs = { 'sector': { 'fields': ['name'] } }
@@ -153,9 +159,34 @@ def api_subcategories(sector_id):
     
     return jsonify(subcat_list)
 
+@app.route('/api/links/reorder', methods=['POST'])
+@login_required
+def reorder_links():
+    # Garante que apenas administradores possam reordenar
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Permission denied'}), 403
+
+    # Pega a lista de IDs na nova ordem enviada pelo JavaScript
+    ordered_ids = request.get_json().get('ordered_ids')
+
+    if not ordered_ids:
+        return jsonify({'status': 'error', 'message': 'No data received'}), 400
+
+    try:
+        # Atualiza o order_index de cada link baseado na sua posição na lista
+        for index, link_id in enumerate(ordered_ids):
+            link = db.session.get(Link, int(link_id))
+            if link:
+                link.order_index = index
+        
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Ordem dos links atualizada.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 # --- ANTES da classe LinkAdminView ---
 class LinkForm(FlaskForm):
-    # Definimos os campos na ordem que queremos
     sector = QuerySelectField(
         label='Setor',
         query_factory=lambda: Sector.query.all(),
@@ -163,40 +194,36 @@ class LinkForm(FlaskForm):
         allow_blank=True,
         blank_text='-- Selecione um Setor --'
     )
+    # A linha 'order_index' foi removida.
     name = StringField('Nome do Link', validators=[DataRequired()])
     url = StringField('URL', validators=[DataRequired()])
     subcategory = QuerySelectField(
         label='Subcategoria',
-        query_factory=lambda: Subcategory.query.all(), # Será populado pelo JS
+        query_factory=lambda: Subcategory.query.all(),
         get_label='name',
         allow_blank=True,
         blank_text='-- Selecione um Setor primeiro --'
     )
 
-# VERIFIQUE SE O SEU CÓDIGO ESTÁ IGUAL A ESTE:
-# --- SUBSTITUA a LinkAdminView antiga por esta ---
+
+# NO SEU app.py
 class LinkAdminView(SecureModelView):
     # Usa nosso formulário customizado
     form = LinkForm
-    
-    # Nossos templates com JavaScript
+
+    # Aponta para os templates de criação/edição que já funcionam
     create_template = 'admin/link_create.html'
     edit_template = 'admin/link_edit.html'
-    
-    # Colunas que aparecem na lista de links
-    column_list = ['name', 'url', 'subcategory']
-    
-    # Reorganiza a ordem dos campos no formulário
-#    form_create_rules = ('sector', 'name', 'url', 'subcategory')
-#    form_edit_rules = ('sector', 'name', 'url', 'subcategory')
 
-    # Mantém a busca por AJAX para o campo de subcategoria (opcional mas recomendado)
-    form_ajax_refs = {
-        'subcategory': {
-            'fields': ['name']
-        }
-    }
+    # Define as colunas que aparecem na lista
+    column_list = ['order_index', 'name', 'url', 'subcategory']
 
+    # Define a ordenação padrão da lista
+    column_default_sort = ('order_index', False) # False = menor para o maior
+
+    # Torna a coluna 'order_index' editável diretamente na tela de lista
+    column_editable_list = ['order_index']
+    form_columns = ['sector', 'name', 'url', 'subcategory', 'order_index']
 
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
 admin.add_view(UserAdminView(User, db.session, name='Usuários'))
@@ -219,25 +246,7 @@ def login():
         else:
             flash('Login sem sucesso. Verifique e-mail e senha.', 'danger')
     return render_template('login.html', title='Login')
-"""
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        hashed_password = bcrypt.generate_password_hash(request.form.get('password')).decode('utf-8')
-        selected_sector_name = request.form.get('sector')
-        sector = Sector.query.filter_by(name=selected_sector_name).first()
-        if not sector:
-            flash('Setor inválido selecionado.', 'danger')
-            return redirect(url_for('register'))
-        user = User(email=request.form.get('email'), password_hash=hashed_password, is_admin=False)
-        user.sectors.append(sector)
-        db.session.add(user)
-        db.session.commit()
-        flash('Sua conta foi criada! Você já pode fazer login.', 'success')
-        return redirect(url_for('login'))
-    sectors = Sector.query.all()
-    return render_template('register.html', title='Registrar', sectors=sectors)
-"""
+
 @app.route('/logout')
 def logout():
     logout_user()
@@ -279,41 +288,36 @@ def dashboard():
     first_sector_name = current_user.sectors[0].name
     return redirect(url_for('view_sector_dashboard', sector_name=first_sector_name))
 
+# NO SEU app.py
 @app.route('/setor/<sector_name>')
 @login_required
 def view_sector_dashboard(sector_name):
-    # Para o menu suspenso, admins veem todos os setores, usuários normais veem apenas os seus.
+    # ... (o início da sua função está correto e não muda)
     sectors_for_dropdown = Sector.query.all() if current_user.is_admin else current_user.sectors
-
     current_sector = Sector.query.filter_by(name=sector_name).first_or_404()
-
-    # Validação de segurança
     if not current_user.is_admin and current_sector not in current_user.sectors:
         flash('Você não tem permissão para acessar este setor.', 'danger')
         return redirect(url_for('dashboard'))
-
-    subcategories_for_sidebar = current_sector.subcategories
+    
+    subcategories_for_sidebar = Subcategory.query.filter_by(sector_id=current_sector.id).all()
     active_subcategory_name = request.args.get('view', None)
     search_term = request.args.get('search', None)
     links_to_show = []
-    
+
+    # Query base para links dentro do setor atual
+    query = db.session.query(Link).join(Subcategory).filter(Subcategory.sector_id == current_sector.id)
+
     if search_term:
         active_subcategory_name = None
-        query = db.session.query(Link).join(Subcategory).join(Sector)
-        
-        # Garante que a busca respeite as permissões do usuário
-        user_accessible_sectors_ids = [s.id for s in current_user.sectors]
-        if not current_user.is_admin:
-            query = query.filter(Sector.id.in_(user_accessible_sectors_ids))
-            
-        links_to_show = query.filter(Link.name.ilike(f'%{search_term}%')).all()
-    
+        # Adiciona a busca à query base e ordena
+        links_to_show = query.filter(Link.name.ilike(f'%{search_term}%')).order_by(Link.order_index).all()
     elif active_subcategory_name:
-        for sub in subcategories_for_sidebar:
-            if sub.name == active_subcategory_name:
-                links_to_show = sub.links
-                break
-
+        # Adiciona o filtro de subcategoria à query base e ordena
+        links_to_show = query.filter(Subcategory.name == active_subcategory_name).order_by(Link.order_index).all()
+    else:
+        # Mostra todos os links do setor, ordenados
+        links_to_show = query.order_by(Link.order_index).all()
+    
     return render_template('dashboard.html',
                            sectors_for_dropdown=sectors_for_dropdown,
                            current_sector=current_sector,
