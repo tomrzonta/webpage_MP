@@ -1,12 +1,17 @@
 import os
 import click
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
+from wtforms_sqlalchemy.fields import QuerySelectField
+from flask_wtf import FlaskForm
+from wtforms import StringField, SelectField
+from wtforms.validators import DataRequired
+
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
 app = Flask(__name__)
@@ -82,7 +87,7 @@ class SecureModelView(ModelView):
 class UserAdminView(SecureModelView):
     form_columns = ['email', 'is_admin', 'sectors']
     column_list = ['email', 'is_admin', 'sectors']
-    form_ajax_refs = { 'sectors': { 'fields': ['name'] } }
+#    form_ajax_refs = { 'sectors': { 'fields': ['name'] } }
 
 class SectorAdminView(SecureModelView):
     can_create = False
@@ -91,14 +96,62 @@ class SectorAdminView(SecureModelView):
 
 class SubcategoryAdminView(SecureModelView):
     form_columns = ['name', 'sector']
-    form_ajax_refs = { 'sector': { 'fields': ['name'] } }
+#    form_ajax_refs = { 'sector': { 'fields': ['name'] } }
     column_searchable_list = ['name']
 
+@app.route('/api/subcategories/<int:sector_id>')
+@login_required
+def api_subcategories(sector_id):
+    subcategories = Subcategory.query.filter_by(sector_id=sector_id).all()
+    
+    # Transforma a lista de objetos em um formato que o JavaScript entende (JSON)
+    subcat_list = [{'id': sub.id, 'name': sub.name} for sub in subcategories]
+    
+    return jsonify(subcat_list)
+
+# --- ANTES da classe LinkAdminView ---
+class LinkForm(FlaskForm):
+    # Definimos os campos na ordem que queremos
+    sector = QuerySelectField(
+        label='Setor',
+        query_factory=lambda: Sector.query.all(),
+        get_label='name',
+        allow_blank=True,
+        blank_text='-- Selecione um Setor --'
+    )
+    name = StringField('Nome do Link', validators=[DataRequired()])
+    url = StringField('URL', validators=[DataRequired()])
+    subcategory = QuerySelectField(
+        label='Subcategoria',
+        query_factory=lambda: Subcategory.query.all(), # Será populado pelo JS
+        get_label='name',
+        allow_blank=True,
+        blank_text='-- Selecione um Setor primeiro --'
+    )
+
+# VERIFIQUE SE O SEU CÓDIGO ESTÁ IGUAL A ESTE:
+# --- SUBSTITUA a LinkAdminView antiga por esta ---
 class LinkAdminView(SecureModelView):
+    # Usa nosso formulário customizado
+    form = LinkForm
+    
+    # Nossos templates com JavaScript
+    create_template = 'admin/link_create.html'
+    edit_template = 'admin/link_edit.html'
+    
+    # Colunas que aparecem na lista de links
     column_list = ['name', 'url', 'subcategory']
-    form_columns = ['name', 'url', 'subcategory']
-    form_ajax_refs = { 'subcategory': { 'fields': ['name'] } }
-    column_searchable_list = ['name']
+    
+    # Reorganiza a ordem dos campos no formulário
+#    form_create_rules = ('sector', 'name', 'url', 'subcategory')
+#    form_edit_rules = ('sector', 'name', 'url', 'subcategory')
+
+    # Mantém a busca por AJAX para o campo de subcategoria (opcional mas recomendado)
+    form_ajax_refs = {
+        'subcategory': {
+            'fields': ['name']
+        }
+    }
 
 
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
@@ -122,7 +175,7 @@ def login():
         else:
             flash('Login sem sucesso. Verifique e-mail e senha.', 'danger')
     return render_template('login.html', title='Login')
-
+"""
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -140,7 +193,7 @@ def register():
         return redirect(url_for('login'))
     sectors = Sector.query.all()
     return render_template('register.html', title='Registrar', sectors=sectors)
-
+"""
 @app.route('/logout')
 def logout():
     logout_user()

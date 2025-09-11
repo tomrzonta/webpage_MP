@@ -1,0 +1,75 @@
+{% extends 'admin/model/edit.html' %}
+
+{% block tail %}
+    {{ super() }}
+    <script>
+        $(document).ready(function() {
+            var sectorSelect = $('#sector');
+            var subcategorySelect = $('#subcategory');
+
+            function updateSubcategories() {
+                var sectorId = sectorSelect.val();
+
+                // Limpa as opções atuais de subcategoria
+                subcategorySelect.empty();
+
+                if (!sectorId) {
+                    // Se nenhum setor estiver selecionado, adiciona uma opção padrão e desabilita
+                    subcategorySelect.append($('<option>', {
+                        value: '',
+                        text: '-- Selecione um Setor primeiro --'
+                    }));
+                    subcategorySelect.prop('disabled', true);
+                    return;
+                }
+
+                // Habilita o dropdown e mostra uma mensagem de "carregando"
+                subcategorySelect.prop('disabled', false);
+                subcategorySelect.append($('<option>', {
+                    value: '',
+                    text: 'Carregando...'
+                }));
+
+                // Faz a chamada AJAX para a nossa API
+                $.ajax({
+                    url: '/api/subcategories/' + sectorId,
+                    type: 'GET',
+                    success: function(data) {
+                        // Limpa a opção "Carregando..."
+                        subcategorySelect.empty();
+                        
+                        // Adiciona uma opção padrão para o usuário escolher
+                        subcategorySelect.append($('<option>', {
+                            value: '',
+                            text: '-- Selecione uma Subcategoria --'
+                        }));
+                        
+                        // Adiciona as novas opções recebidas da API
+                        $.each(data, function(index, subcategory) {
+                            subcategorySelect.append($('<option>', {
+                                value: subcategory.id,
+                                text: subcategory.name
+                            }));
+                        });
+                    },
+                    error: function() {
+                        // Em caso de erro
+                        subcategorySelect.empty();
+                        subcategorySelect.append($('<option>', {
+                            value: '',
+                            text: 'Erro ao carregar subcategorias'
+                        }));
+                    }
+                });
+            }
+
+            // Ouve por mudanças no dropdown 'sector'
+            sectorSelect.on('change', function() {
+                updateSubcategories();
+            });
+
+            // Chama a função uma vez no início para configurar o estado inicial
+            updateSubcategories();
+        });
+    </script>
+{% endblock %}
