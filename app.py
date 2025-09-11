@@ -11,6 +11,8 @@ from wtforms_sqlalchemy.fields import QuerySelectField
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField
 from wtforms.validators import DataRequired
+from wtforms.fields import PasswordField
+from flask_admin.actions import action
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
@@ -84,13 +86,55 @@ class SecureModelView(ModelView):
         flash('Você precisa ser um administrador para acessar esta página.', 'danger')
         return redirect(url_for('login'))
 
+# VERSÃO CORRIGIDA da UserAdminView
+# Não se esqueça do import no topo do arquivo, caso ele não esteja lá
+# from wtforms.fields import PasswordField
+
+# --- COLE ESTE BLOCO CORRIGIDO NO LUGAR DA SUA UserAdminView ATUAL ---
+
 class UserAdminView(SecureModelView):
-    form_columns = ['email', 'is_admin', 'sectors']
+    # Colunas que aparecem na TELA DE LISTAGEM
     column_list = ['email', 'is_admin', 'sectors']
-#    form_ajax_refs = { 'sectors': { 'fields': ['name'] } }
+    
+    # EXCLUI o campo 'password_hash' do formulário para evitar conflitos
+    form_excluded_columns = ['password_hash']
+
+    # Adiciona nosso campo de senha temporário ao formulário de criação/edição
+    form_extra_fields = {
+        'password': PasswordField('Nova Senha [Deixe em branco para não alterar]')
+    }
+
+    # Intercepta o processo de salvar para criptografar a senha corretamente
+    def on_model_change(self, form, model, is_created):
+        # Se o campo de senha foi preenchido, nós geramos o hash
+        if form.password.data:
+            model.password_hash = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+
+    # Cria a ação customizada para resetar a senha
+    @action('reset_password', 
+            'Resetar Senha para Padrão', 
+            'Tem certeza que deseja resetar a senha destes usuários para "12345"?')
+    def reset_password(self, ids):
+        try:
+            query = User.query.filter(User.id.in_(ids))
+            
+            default_password_hash = bcrypt.generate_password_hash('12345').decode('utf-8')
+            
+            count = 0
+            for user in query.all():
+                user.password_hash = default_password_hash
+                count += 1
+            
+            db.session.commit()
+            
+            flash(f'{count} senha(s) de usuário(s) foi(ram) resetada(s) para o padrão "12345".', 'success')
+        except Exception as ex:
+            flash(f'Falha ao resetar senhas: {str(ex)}', 'danger')
+
+# --- FIM DO BLOCO PARA COPIAR ---
 
 class SectorAdminView(SecureModelView):
-    can_create = False
+    can_create = True
     column_list = ['name', 'subcategories']
     column_searchable_list = ['name']
 
@@ -198,6 +242,31 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not new_password or not confirm_password:
+            flash('Por favor, preencha ambos os campos.', 'warning')
+            return redirect(url_for('change_password'))
+
+        if new_password != confirm_password:
+            flash('As senhas não coincidem. Tente novamente.', 'danger')
+            return redirect(url_for('change_password'))
+        
+        # Se tudo estiver certo, atualiza a senha
+        user = current_user
+        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        db.session.commit()
+
+        flash('Sua senha foi alterada com sucesso!', 'success')
+        return redirect(url_for('dashboard'))
+
+    return render_template('change_password.html', title='Alterar Senha')
 
 
 # --- ROTAS PRINCIPAIS DA APLICAÇÃO ---

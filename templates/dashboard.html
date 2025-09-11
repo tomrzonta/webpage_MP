@@ -56,7 +56,9 @@
             {% endif %}
             
             <div class="user-info">
-                {{ current_user.email }} | <a href="{{ url_for('logout') }}">Sair</a>
+                {{ current_user.email }} | 
+                <a href="{{ url_for('change_password') }}">Alterar Senha</a> | 
+                <a href="{{ url_for('logout') }}">Sair</a>
             </div>
         </div>
     </header>
