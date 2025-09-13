@@ -38,6 +38,7 @@
         </div>
         <div class="header-right">
 
+            <a href="{{ url_for('view_sector_home', sector_name=current_sector.name) }}" class="admin-button" style="background-color: #17a2b8;">Mural de Notícias</a>
             {% if current_user.is_admin or current_user.sectors|length > 1 %}
             <div class="sector-dropdown">
                 <button>Mudar Setor ▼</button>

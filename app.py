@@ -11,11 +11,17 @@ from wtforms_sqlalchemy.fields import QuerySelectField
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField
 from wtforms.validators import DataRequired
-from wtforms.fields import PasswordField
 from flask_admin.actions import action
 from markupsafe import Markup
 from wtforms import StringField, IntegerField
 from datetime import datetime
+from flask_admin import BaseView, expose
+from wtforms import validators 
+from wtforms import StringField, validators
+from wtforms.fields import PasswordField
+from wtforms.fields import BooleanField
+from wtforms_sqlalchemy.fields import QuerySelectMultipleField
+
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
@@ -46,44 +52,52 @@ def load_user(user_id):
 
 
 # --- MODELOS DO BANCO DE DADOS ---
+
+
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     sectors = db.relationship('Sector', secondary=user_sectors_association, lazy='subquery',
-                             back_populates='users')
+                              back_populates='users')
+    posts = db.relationship('Post', back_populates='author', lazy=True)
 
 class Sector(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    order_index = db.Column(db.Integer, nullable=False, default=0)
+    order_index = db.Column(db.Integer, nullable=False, default=0) # <-- Adicionar
     subcategories = db.relationship('Subcategory', back_populates='sector', lazy=True, cascade="all, delete-orphan")
     users = db.relationship('User', secondary=user_sectors_association, lazy='subquery',
-                           back_populates='sectors')
+                            back_populates='sectors')
+    posts = db.relationship('Post', back_populates='sector', lazy=True, cascade="all, delete-orphan") # <-- Adicionar
+
     def __str__(self):
         return self.name
 
 class Subcategory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    order_index = db.Column(db.Integer, nullable=False, default=0)
+    order_index = db.Column(db.Integer, nullable=False, default=0) # <-- Adicionar
     sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
     sector = db.relationship('Sector', back_populates='subcategories')
     links = db.relationship('Link', back_populates='subcategory', lazy=True, cascade="all, delete-orphan")
+    
     def __str__(self):
         return self.name
+
 
 class Link(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     url = db.Column(db.String(500), nullable=False)
-    order_index = db.Column(db.Integer, nullable=False, default=0) # <-- ADICIONE ESTA LINHA
+    order_index = db.Column(db.Integer, nullable=False, default=0)
     subcategory_id = db.Column(db.Integer, db.ForeignKey('subcategory.id'), nullable=False)
     subcategory = db.relationship('Subcategory', back_populates='links')
+    
     def __str__(self):
         return self.name
-    
+
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
@@ -91,7 +105,11 @@ class Post(db.Model):
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     order_index = db.Column(db.Integer, nullable=False, default=0)
     sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
-    sector = db.relationship('Sector', backref=db.backref('posts', lazy=True, cascade="all, delete-orphan"))
+    sector = db.relationship('Sector', back_populates='posts')
+    
+    # --- ADICIONE ESTAS DUAS LINHAS ---
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    author = db.relationship('User', back_populates='posts')
     
     def __repr__(self):
         return f'<Post {self.title}>'
@@ -105,6 +123,20 @@ class SecureModelView(ModelView):
         return redirect(url_for('login'))
 
 
+# --- COLE ESTE BLOCO ÚNICO NO LUGAR DAS SUAS UserForm E UserAdminView ---
+
+class UserForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired()])
+    password = PasswordField('Nova Senha [Deixe em branco para não alterar]')
+    is_admin = BooleanField('É Administrador?')
+    sectors = QuerySelectMultipleField(
+        label='Setores',
+        query_factory=lambda: Sector.query.all(),
+        get_label='name',
+        allow_blank=True
+    )
+
+# Substitua sua UserAdminView atual por esta versão
 class UserAdminView(SecureModelView):
     # Colunas que aparecem na TELA DE LISTAGEM
     column_list = ['email', 'is_admin', 'sectors']
@@ -112,37 +144,59 @@ class UserAdminView(SecureModelView):
     # EXCLUI o campo 'password_hash' do formulário para evitar conflitos
     form_excluded_columns = ['password_hash']
 
-    # Adiciona nosso campo de senha temporário ao formulário de criação/edição
+    # Adiciona nosso campo de senha temporário ao formulário
     form_extra_fields = {
         'password': PasswordField('Nova Senha [Deixe em branco para não alterar]')
     }
 
-    # Intercepta o processo de salvar para criptografar a senha corretamente
+    # Intercepta o processo de salvar para criptografar a senha (versão segura)
     def on_model_change(self, form, model, is_created):
-        # Se o campo de senha foi preenchido, nós geramos o hash
         if form.password.data:
             model.password_hash = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+        elif is_created and not form.password.data:
+            raise validators.ValidationError('O campo "Nova Senha" é obrigatório ao criar um novo usuário.')
 
-    # Cria a ação customizada para resetar a senha
+    # Ação de reset de senha
     @action('reset_password', 
             'Resetar Senha para Padrão', 
             'Tem certeza que deseja resetar a senha destes usuários para "12345"?')
     def reset_password(self, ids):
         try:
             query = User.query.filter(User.id.in_(ids))
-            
             default_password_hash = bcrypt.generate_password_hash('12345').decode('utf-8')
-            
             count = 0
             for user in query.all():
                 user.password_hash = default_password_hash
                 count += 1
-            
             db.session.commit()
-            
             flash(f'{count} senha(s) de usuário(s) foi(ram) resetada(s) para o padrão "12345".', 'success')
         except Exception as ex:
             flash(f'Falha ao resetar senhas: {str(ex)}', 'danger')
+
+# Em app.py, substitua sua PostAdminView por esta
+class PostAdminView(SecureModelView):
+    # Campos que aparecerão no formulário de criação/edição
+    form_columns = ['sector', 'title', 'content', 'order_index']
+    
+    # Colunas que aparecerão na lista de notícias
+    column_list = ['title', 'sector', 'timestamp', 'order_index']
+    
+    # Adiciona um filtro para encontrar notícias de um setor específico
+    column_filters = ['sector']
+
+    # Ordena a lista para mostrar as notícias mais recentes primeiro
+    column_default_sort = ('timestamp', True)
+
+    # Permite editar o título e a ordem diretamente na lista
+    column_editable_list = ['title', 'order_index']
+
+    # --- MÉTODO DE TESTE ---
+    def on_model_change(self, form, model, is_created):
+        # Adicionamos prints para depuração
+        print("--- MÉTODO on_model_change FOI CHAMADO ---") 
+        if is_created:
+            print(f"--- Criando novo post. ID do usuário atual: {current_user.id} ---")
+            model.author_id = current_user.id
 
 # --- FIM DO BLOCO PARA COPIAR ---
 
@@ -154,26 +208,12 @@ class SectorAdminView(SecureModelView):
     # Adicione esta linha para limitar o formulário
     form_columns = ['name']
 
-class PostAdminView(SecureModelView):
-    # Campos que aparecerão no formulário de criação/edição
-    form_columns = ['sector', 'title', 'content', 'order_index']
-    
-    # Colunas que aparecerão na lista de notícias
-    column_list = ['title', 'sector', 'timestamp', 'order_index']
-    
-    # Adiciona filtros por setor
-    column_filters = ['sector']
-
-    # Define a ordenação padrão
-    column_default_sort = ('order_index', False)
-
-    # Torna a coluna de ordem editável na lista
-    column_editable_list = ['order_index', 'title']
 
 class SubcategoryAdminView(SecureModelView):
     form_columns = ['name', 'sector']
 #    form_ajax_refs = { 'sector': { 'fields': ['name'] } }
     column_searchable_list = ['name']
+
 
 @app.route('/api/subcategories/<int:sector_id>')
 @login_required
@@ -335,6 +375,24 @@ def dashboard():
         return render_template('no_sector.html')
     first_sector_name = current_user.sectors[0].name
     return redirect(url_for('view_sector_dashboard', sector_name=first_sector_name))
+
+# Adicione esta nova rota
+@app.route('/setor/<string:sector_name>/home')
+@login_required
+def view_sector_home(sector_name):
+    # Encontra o setor pelo nome ou retorna erro 404
+    sector = Sector.query.filter_by(name=sector_name).first_or_404()
+
+    # Validação de segurança para garantir que o usuário tem acesso a este setor
+    if not current_user.is_admin and sector not in current_user.sectors:
+        flash('Você não tem permissão para acessar este setor.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Busca todas as postagens daquele setor, ordenadas pela data (mais nova primeiro)
+    posts = Post.query.filter_by(sector_id=sector.id).order_by(Post.timestamp.desc()).all()
+
+    # Renderiza o novo template, passando o setor atual e a lista de posts
+    return render_template('sector_home.html', current_sector=sector, posts=posts)
 
 # NO SEU app.py
 @app.route('/setor/<sector_name>')
