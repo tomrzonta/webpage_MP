@@ -1,0 +1,34 @@
+# INSERIR NOVO SETOR NO BANCO DE DADOS.
+
+INSERT INTO sector (name) VALUES ('Acessos');
+
+
+
+
+
+
+# INSERIR AO USUÁRIO JÁ CRIADO O ACESSO A MULTIPLOS SETORES 
+
+INSERT INTO user_sectors (user_id, sector_id) VALUES
+  (ID_DO_USUARIO, ID_DO_SETOR_1),
+
+  (2, 6);   # ESSA LINHA CONTEM O EXEMPLO PRÁTICO
+
+
+# CÓDIGO PARA LIDAR COM ERRO NO AMBIENTE VIRTUAL DE REPOSITÓRIO BAIXADO
+
+deactivate
+Remove-Item -Recurse -Force venv
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+
+
+
+# CRIAR SETOR
+
+flask create-sector "Suporte"
+
+# CRIAR USUÁRIO 
+
+flask create-admin

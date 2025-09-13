@@ -15,6 +15,7 @@ from wtforms.fields import PasswordField
 from flask_admin.actions import action
 from markupsafe import Markup
 from wtforms import StringField, IntegerField
+from datetime import datetime
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
@@ -56,6 +57,7 @@ class User(db.Model, UserMixin):
 class Sector(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
     subcategories = db.relationship('Subcategory', back_populates='sector', lazy=True, cascade="all, delete-orphan")
     users = db.relationship('User', secondary=user_sectors_association, lazy='subquery',
                            back_populates='sectors')
@@ -65,6 +67,7 @@ class Sector(db.Model):
 class Subcategory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
     sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
     sector = db.relationship('Sector', back_populates='subcategories')
     links = db.relationship('Link', back_populates='subcategory', lazy=True, cascade="all, delete-orphan")
@@ -80,6 +83,18 @@ class Link(db.Model):
     subcategory = db.relationship('Subcategory', back_populates='links')
     def __str__(self):
         return self.name
+    
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
+    sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
+    sector = db.relationship('Sector', backref=db.backref('posts', lazy=True, cascade="all, delete-orphan"))
+    
+    def __repr__(self):
+        return f'<Post {self.title}>'
 
 # --- CONFIGURAÇÃO DO PAINEL ADMIN ---
 class SecureModelView(ModelView):
@@ -89,11 +104,6 @@ class SecureModelView(ModelView):
         flash('Você precisa ser um administrador para acessar esta página.', 'danger')
         return redirect(url_for('login'))
 
-# VERSÃO CORRIGIDA da UserAdminView
-# Não se esqueça do import no topo do arquivo, caso ele não esteja lá
-# from wtforms.fields import PasswordField
-
-# --- COLE ESTE BLOCO CORRIGIDO NO LUGAR DA SUA UserAdminView ATUAL ---
 
 class UserAdminView(SecureModelView):
     # Colunas que aparecem na TELA DE LISTAGEM
@@ -143,6 +153,22 @@ class SectorAdminView(SecureModelView):
 
     # Adicione esta linha para limitar o formulário
     form_columns = ['name']
+
+class PostAdminView(SecureModelView):
+    # Campos que aparecerão no formulário de criação/edição
+    form_columns = ['sector', 'title', 'content', 'order_index']
+    
+    # Colunas que aparecerão na lista de notícias
+    column_list = ['title', 'sector', 'timestamp', 'order_index']
+    
+    # Adiciona filtros por setor
+    column_filters = ['sector']
+
+    # Define a ordenação padrão
+    column_default_sort = ('order_index', False)
+
+    # Torna a coluna de ordem editável na lista
+    column_editable_list = ['order_index', 'title']
 
 class SubcategoryAdminView(SecureModelView):
     form_columns = ['name', 'sector']
@@ -251,6 +277,7 @@ admin.add_view(UserAdminView(User, db.session, name='Usuários'))
 admin.add_view(SectorAdminView(Sector, db.session, name='Setores'))
 admin.add_view(SubcategoryAdminView(Subcategory, db.session, name='Subcategorias'))
 admin.add_view(LinkAdminView(Link, db.session, name='Links'))
+admin.add_view(PostAdminView(Post, db.session, name='Notícias'))
 admin.add_link(MenuLink(name='Voltar para a Aplicação', category='', url='/'))
 
 
