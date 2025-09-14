@@ -21,11 +21,16 @@ from wtforms import StringField, validators
 from wtforms.fields import PasswordField
 from wtforms.fields import BooleanField
 from wtforms_sqlalchemy.fields import QuerySelectMultipleField
+from flask_ckeditor import CKEditor
+from wtforms.fields import TextAreaField
+
 
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
 app = Flask(__name__)
+ckeditor = CKEditor(app) # <-- ADICIONE ESTA LINHA
+basedir = os.path.abspath(os.path.dirname(__file__))
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -175,6 +180,17 @@ class UserAdminView(SecureModelView):
 
 # Em app.py, substitua sua PostAdminView por esta
 class PostAdminView(SecureModelView):
+    # --- ADICIONE ESTE BLOCO ---
+    extra_js = ['//cdn.ckeditor.com/4.22.1/standard/ckeditor.js']
+
+    form_overrides = {
+        'content': TextAreaField # Diz que o campo 'content' é um TextArea
+    }
+    form_widget_args = {
+        'content': {
+            'class': 'ckeditor' # Aplica a classe CSS que ativa o editor
+        }
+    }
     # Campos que aparecerão no formulário de criação/edição
     form_columns = ['sector', 'title', 'content', 'order_index']
     
