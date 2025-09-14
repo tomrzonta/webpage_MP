@@ -523,7 +523,7 @@ def view_sector_dashboard(sector_name):
         flash('Você não tem permissão para acessar este setor.', 'danger')
         return redirect(url_for('dashboard'))
     
-    subcategories_for_sidebar = Subcategory.query.filter_by(sector_id=current_sector.id).all()
+    subcategories_for_sidebar = Subcategory.query.filter_by(sector_id=current_sector.id).order_by(Subcategory.order_index).all()
     active_subcategory_name = request.args.get('view', None)
     search_term = request.args.get('search', None)
     links_to_show = []
