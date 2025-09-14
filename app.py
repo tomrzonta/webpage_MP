@@ -29,6 +29,7 @@ from flask_ckeditor import CKEditor, CKEditorField, upload_success
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_wtf.file import FileField, FileAllowed
 from werkzeug.utils import secure_filename
+from flask_admin.form.widgets import Select2Widget
 
 
 
@@ -51,6 +52,11 @@ db = SQLAlchemy(app)
 # --- TABELA DE ASSOCIAÇÃO ---
 user_sectors_association = db.Table('user_sectors',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('sector_id', db.Integer, db.ForeignKey('sector.id'), primary_key=True)
+)
+
+post_sectors_association = db.Table('post_sectors',
+    db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True),
     db.Column('sector_id', db.Integer, db.ForeignKey('sector.id'), primary_key=True)
 )
 
@@ -85,8 +91,8 @@ class Sector(db.Model):
     subcategories = db.relationship('Subcategory', back_populates='sector', lazy=True, cascade="all, delete-orphan")
     users = db.relationship('User', secondary=user_sectors_association, lazy='subquery',
                             back_populates='sectors')
-    posts = db.relationship('Post', back_populates='sector', lazy=True, cascade="all, delete-orphan") # <-- Adicionar
-
+    posts = db.relationship('Post', secondary=post_sectors_association, lazy='dynamic',
+                            back_populates='sectors')
     def __str__(self):
         return self.name
 
@@ -117,13 +123,15 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    # --- ADICIONE ESTA LINHA ---
-    image_filename = db.Column(db.String(100), nullable=True) # Guarda o nome do arquivo da imagem
-    # ---
+    image_filename = db.Column(db.String(100), nullable=True)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     order_index = db.Column(db.Integer, nullable=False, default=0)
-    sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
-    sector = db.relationship('Sector', back_populates='posts')
+    
+    # A nova relação "muitos-para-muitos" com Setores
+    sectors = db.relationship('Sector', secondary=post_sectors_association, lazy='subquery',
+                              back_populates='posts')
+    
+    # A relação com o autor continua a mesma
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     author = db.relationship('User', back_populates='posts')
     
@@ -170,11 +178,13 @@ class UserForm(FlaskForm):
     )
 
 class PostForm(FlaskForm):
-    sector = QuerySelectField(
-        label='Setor',
+    sectors = QuerySelectMultipleField(
+        label='Setores',
         query_factory=lambda: Sector.query.all(),
         get_label='name',
-        validators=[DataRequired()]
+        validators=[DataRequired()],
+        widget=Select2Widget(multiple=True),
+        render_kw={'class': 'form-control'} # <-- ADICIONE APENAS ESTA LINHA
     )
     title = StringField('Título', validators=[DataRequired()])
     content = TextAreaField('Conteúdo', render_kw={'class': 'ckeditor'})
@@ -183,42 +193,42 @@ class PostForm(FlaskForm):
     ])
     order_index = IntegerField('Ordem', default=0)
 
-# Em app.py, substitua sua PostAdminView por esta
-# Em app.py
+
 
 class PostAdminView(SecureModelView):
-    # Usa nosso novo formulário customizado que inclui o campo para upload de imagem
+    # Usa nosso formulário customizado atualizado
     form = PostForm
 
-    # Garante que o script do CKEditor seja carregado na página de criação/edição
+    # Garante que o script do CKEditor seja carregado
     extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
 
-    # Colunas que serão exibidas na lista de notícias
-    column_list = ['title', 'author', 'sector', 'timestamp', 'order_index']
+    form_widget_args = {
+        'sectors': {
+            'class': 'select2'
+        }
+    }
 
-    # Adiciona filtros para encontrar notícias por setor ou autor
-    column_filters = ['sector', 'author']
+    # Colunas que serão exibidas na lista (com 'sectors' no plural)
+    column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index']
 
-    # Ordena a lista para mostrar as notícias mais recentes primeiro por padrão
+    # Filtros (com 'sectors' no plural)
+    column_filters = ['sectors', 'author']
+
+    # Ordenação padrão da lista
     column_default_sort = ('timestamp', True)
 
-    # Permite a edição rápida do título e da ordem diretamente na lista
+    # Edição rápida na lista
     column_editable_list = ['title', 'order_index']
 
-    # Este método é executado um pouco antes de um registro ser salvo
+    # Método para salvar o modelo
     def on_model_change(self, form, model, is_created):
-        # Define o autor automaticamente apenas na criação da notícia
         if is_created:
             model.author_id = current_user.id
 
-        # Verifica se um novo arquivo de imagem foi enviado no formulário
         if form.image.data:
             file = form.image.data
-            # Cria um nome de arquivo seguro e único para evitar conflitos
             filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
-            # Salva o arquivo na nossa pasta 'static/uploads'
             file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
-            # Salva apenas o nome do arquivo no banco de dados
             model.image_filename = filename
 
 
@@ -430,7 +440,9 @@ class LinkAdminView(SecureModelView):
 
     form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
-admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4')
+admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4',
+              base_template='admin/custom_base.html')
+
 admin.add_view(UserAdminView(User, db.session, name='Usuários'))
 admin.add_view(SectorAdminView(Sector, db.session, name='Setores'))
 admin.add_view(SubcategoryAdminView(Subcategory, db.session, name='Subcategorias'))
@@ -507,9 +519,8 @@ def view_sector_home(sector_name):
         return redirect(url_for('dashboard'))
     
     # Busca todas as postagens daquele setor, ordenadas pela data (mais nova primeiro)
-    posts = Post.query.filter_by(sector_id=sector.id).order_by(Post.timestamp.desc()).all()
+    posts = sector.posts.order_by(Post.timestamp.desc()).all()
 
-    # Renderiza o novo template, passando o setor atual e a lista de posts
     return render_template('sector_home.html', current_sector=sector, posts=posts)
 
 # NO SEU app.py

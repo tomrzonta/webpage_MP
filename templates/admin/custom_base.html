@@ -1,0 +1,20 @@
+{% extends 'admin/base.html' %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        /* Força os itens do Select2 a ficarem lado a lado */
+        .select2-selection--multiple .select2-selection__choice {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 5px !important;
+            float: left;
+        }
+
+        /* --- REGRA ADICIONADA AQUI --- */
+        /* Força o container do Select2 a ocupar 100% da largura */
+        .select2-container {
+            width: 100% !important;
+        }
+    </style>
+{% endblock %}
