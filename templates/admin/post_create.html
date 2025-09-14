@@ -1,0 +1,30 @@
+{% extends 'admin/model/create.html' %}
+
+{% block tail %}
+    {{ super() }}
+    <script>
+        // Espera a instância do CKEditor ser criada
+        CKEDITOR.on('instanceReady', function(ev) {
+            var editor = ev.editor;
+
+            // Escuta pelo evento de RESPOSTA do upload de arquivo
+            editor.on('fileUploadResponse', function(evt) {
+                // Cancela o comportamento padrão do CKEditor para termos controle total
+                evt.stop();
+
+                // Pega os dados JSON que nosso backend enviou
+                var data = evt.data.fileLoader.xhr.responseText;
+                var json = JSON.parse(data);
+
+                // Pega a caixa de diálogo de imagem que está aberta
+                var dialog = CKEDITOR.dialog.getCurrent();
+                
+                // Encontra o campo de URL na PRIMEIRA aba ('info') e insere nosso link
+                dialog.getContentElement('info', 'txtUrl').setValue(json.url);
+
+                // Clica no botão "OK" do diálogo para o usuário
+                dialog.getButton('ok').click();
+            });
+        });
+    </script>
+{% endblock %}

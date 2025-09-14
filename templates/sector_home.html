@@ -31,9 +31,14 @@
                             Publicado por: <strong>{{ post.author.email }}</strong> em {{ post.timestamp.strftime('%d/%m/%Y às %H:%M') }}
                         </h6>
                         <hr>
+
                         <div class="card-text">
                             {{ post.content | safe }}
                         </div>
+
+                        {% if post.image_filename %}
+                            <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}" class="img-fluid rounded my-3" alt="Imagem da notícia">
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}

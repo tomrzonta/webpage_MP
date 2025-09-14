@@ -18,11 +18,18 @@ from datetime import datetime
 from flask_admin import BaseView, expose
 from wtforms import validators 
 from wtforms import StringField, validators
-from wtforms.fields import PasswordField
+from wtforms.fields import PasswordField, TextAreaField
 from wtforms.fields import BooleanField
 from wtforms_sqlalchemy.fields import QuerySelectMultipleField
 from flask_ckeditor import CKEditor
-from wtforms.fields import TextAreaField
+from flask_ckeditor import CKEditorField
+import uuid
+from flask import abort
+from flask_ckeditor import CKEditor, CKEditorField, upload_success
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_wtf.file import FileField, FileAllowed
+from werkzeug.utils import secure_filename
+
 
 
 
@@ -35,6 +42,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil'
+app.config['UPLOADED_PATH'] = os.path.join(basedir, 'static', 'uploads')
+app.config['CKEDITOR_FILE_UPLOADER'] = 'upload' # 'upload' é o nome que daremos à nossa rota
+app.config['CKEDITOR_ENABLE_CSRF'] = True
 
 db = SQLAlchemy(app)
 
@@ -107,12 +117,13 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
+    # --- ADICIONE ESTA LINHA ---
+    image_filename = db.Column(db.String(100), nullable=True) # Guarda o nome do arquivo da imagem
+    # ---
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     order_index = db.Column(db.Integer, nullable=False, default=0)
     sector_id = db.Column(db.Integer, db.ForeignKey('sector.id'), nullable=False)
     sector = db.relationship('Sector', back_populates='posts')
-    
-    # --- ADICIONE ESTAS DUAS LINHAS ---
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     author = db.relationship('User', back_populates='posts')
     
@@ -126,20 +137,6 @@ class SecureModelView(ModelView):
     def inaccessible_callback(self, name, **kwargs):
         flash('Você precisa ser um administrador para acessar esta página.', 'danger')
         return redirect(url_for('login'))
-
-
-# --- COLE ESTE BLOCO ÚNICO NO LUGAR DAS SUAS UserForm E UserAdminView ---
-
-class UserForm(FlaskForm):
-    email = StringField('Email', validators=[DataRequired()])
-    password = PasswordField('Nova Senha [Deixe em branco para não alterar]')
-    is_admin = BooleanField('É Administrador?')
-    sectors = QuerySelectMultipleField(
-        label='Setores',
-        query_factory=lambda: Sector.query.all(),
-        get_label='name',
-        allow_blank=True
-    )
 
 # Substitua sua UserAdminView atual por esta versão
 class UserAdminView(SecureModelView):
@@ -160,59 +157,71 @@ class UserAdminView(SecureModelView):
             model.password_hash = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
         elif is_created and not form.password.data:
             raise validators.ValidationError('O campo "Nova Senha" é obrigatório ao criar um novo usuário.')
+        
+class UserForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired()])
+    password = PasswordField('Nova Senha [Deixe em branco para não alterar]')
+    is_admin = BooleanField('É Administrador?')
+    sectors = QuerySelectMultipleField(
+        label='Setores',
+        query_factory=lambda: Sector.query.all(),
+        get_label='name',
+        allow_blank=True
+    )
 
-    # Ação de reset de senha
-    @action('reset_password', 
-            'Resetar Senha para Padrão', 
-            'Tem certeza que deseja resetar a senha destes usuários para "12345"?')
-    def reset_password(self, ids):
-        try:
-            query = User.query.filter(User.id.in_(ids))
-            default_password_hash = bcrypt.generate_password_hash('12345').decode('utf-8')
-            count = 0
-            for user in query.all():
-                user.password_hash = default_password_hash
-                count += 1
-            db.session.commit()
-            flash(f'{count} senha(s) de usuário(s) foi(ram) resetada(s) para o padrão "12345".', 'success')
-        except Exception as ex:
-            flash(f'Falha ao resetar senhas: {str(ex)}', 'danger')
+class PostForm(FlaskForm):
+    sector = QuerySelectField(
+        label='Setor',
+        query_factory=lambda: Sector.query.all(),
+        get_label='name',
+        validators=[DataRequired()]
+    )
+    title = StringField('Título', validators=[DataRequired()])
+    content = TextAreaField('Conteúdo', render_kw={'class': 'ckeditor'})
+    image = FileField('Imagem de Destaque', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Apenas imagens são permitidas!')
+    ])
+    order_index = IntegerField('Ordem', default=0)
 
 # Em app.py, substitua sua PostAdminView por esta
+# Em app.py
+
 class PostAdminView(SecureModelView):
-    # --- ADICIONE ESTE BLOCO ---
-    extra_js = ['//cdn.ckeditor.com/4.22.1/standard/ckeditor.js']
+    # Usa nosso novo formulário customizado que inclui o campo para upload de imagem
+    form = PostForm
 
-    form_overrides = {
-        'content': TextAreaField # Diz que o campo 'content' é um TextArea
-    }
-    form_widget_args = {
-        'content': {
-            'class': 'ckeditor' # Aplica a classe CSS que ativa o editor
-        }
-    }
-    # Campos que aparecerão no formulário de criação/edição
-    form_columns = ['sector', 'title', 'content', 'order_index']
-    
-    # Colunas que aparecerão na lista de notícias
-    column_list = ['title', 'sector', 'timestamp', 'order_index']
-    
-    # Adiciona um filtro para encontrar notícias de um setor específico
-    column_filters = ['sector']
+    # Garante que o script do CKEditor seja carregado na página de criação/edição
+    extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
 
-    # Ordena a lista para mostrar as notícias mais recentes primeiro
+    # Colunas que serão exibidas na lista de notícias
+    column_list = ['title', 'author', 'sector', 'timestamp', 'order_index']
+
+    # Adiciona filtros para encontrar notícias por setor ou autor
+    column_filters = ['sector', 'author']
+
+    # Ordena a lista para mostrar as notícias mais recentes primeiro por padrão
     column_default_sort = ('timestamp', True)
 
-    # Permite editar o título e a ordem diretamente na lista
+    # Permite a edição rápida do título e da ordem diretamente na lista
     column_editable_list = ['title', 'order_index']
 
-    # --- MÉTODO DE TESTE ---
+    # Este método é executado um pouco antes de um registro ser salvo
     def on_model_change(self, form, model, is_created):
-        # Adicionamos prints para depuração
-        print("--- MÉTODO on_model_change FOI CHAMADO ---") 
+        # Define o autor automaticamente apenas na criação da notícia
         if is_created:
-            print(f"--- Criando novo post. ID do usuário atual: {current_user.id} ---")
             model.author_id = current_user.id
+
+        # Verifica se um novo arquivo de imagem foi enviado no formulário
+        if form.image.data:
+            file = form.image.data
+            # Cria um nome de arquivo seguro e único para evitar conflitos
+            filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
+            # Salva o arquivo na nossa pasta 'static/uploads'
+            file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
+            # Salva apenas o nome do arquivo no banco de dados
+            model.image_filename = filename
+
+
 
 # --- FIM DO BLOCO PARA COPIAR ---
 
@@ -240,6 +249,52 @@ def api_subcategories(sector_id):
     subcat_list = [{'id': sub.id, 'name': sub.name} for sub in subcategories]
     
     return jsonify(subcat_list)
+
+# --- ROTA PARA UPLOAD DE IMAGENS DO CKEDITOR ---
+@app.route('/upload', methods=['POST'])
+@login_required
+def upload():
+    # Garante que apenas administradores possam fazer upload
+    if not current_user.is_admin:
+        abort(403)
+
+    # Pega o arquivo enviado pelo CKEditor
+    f = request.files.get('upload')
+    if f is None:
+        return jsonify({'error': {'message': 'Nenhum arquivo enviado.'}}), 400
+
+    # Gera um nome de arquivo seguro e único
+    extension = os.path.splitext(f.filename)[1].lower()
+    if extension not in ['.jpg', '.gif', '.png', '.jpeg']:
+        return jsonify({'error': {'message': 'Tipo de arquivo de imagem inválido.'}}), 400
+        
+    filename = str(uuid.uuid4()) + extension
+    
+    # Salva o arquivo na nossa pasta de uploads
+    f.save(os.path.join(app.config['UPLOADED_PATH'], filename))
+    
+    # Gera a URL pública para a imagem
+    url = url_for('static', filename=f'uploads/{filename}')
+    
+    # Retorna a resposta JSON no formato que o CKEditor espera
+    return jsonify({'uploaded': 1, 'fileName': filename, 'url': url})
+
+# Ação de reset de senha
+@action('reset_password', 
+        'Resetar Senha para Padrão', 
+        'Tem certeza que deseja resetar a senha destes usuários para "12345"?')
+def reset_password(self, ids):
+    try:
+        query = User.query.filter(User.id.in_(ids))
+        default_password_hash = bcrypt.generate_password_hash('12345').decode('utf-8')
+        count = 0
+        for user in query.all():
+            user.password_hash = default_password_hash
+            count += 1
+        db.session.commit()
+        flash(f'{count} senha(s) de usuário(s) foi(ram) resetada(s) para o padrão "12345".', 'success')
+    except Exception as ex:
+        flash(f'Falha ao resetar senhas: {str(ex)}', 'danger')
 
 @app.route('/api/links/reorder', methods=['POST'])
 @login_required
