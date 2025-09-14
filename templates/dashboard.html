@@ -53,8 +53,8 @@
             {% endif %}
 
             {% if current_user.is_admin %}
-            <a href="{{ url_for('admin.index') }}" class="admin-button">Painel Admin</a>
-            {% endif %}
+                <a href="{{ url_for('admin.index') }}" class="admin-button">Painel Admin</a>
+                {% endif %}
             
             <div class="user-info">
                 {{ current_user.email }} | 

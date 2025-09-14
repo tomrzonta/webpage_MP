@@ -30,6 +30,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_wtf.file import FileField, FileAllowed
 from werkzeug.utils import secure_filename
 from flask_admin.form.widgets import Select2Widget
+from flask_admin import BaseView, expose
+from flask_admin import Admin, BaseView, expose, AdminIndexView
 
 
 
@@ -165,6 +167,16 @@ class UserAdminView(SecureModelView):
             model.password_hash = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
         elif is_created and not form.password.data:
             raise validators.ValidationError('O campo "Nova Senha" é obrigatório ao criar um novo usuário.')
+        
+# Em app.py
+class MyAdminIndexView(AdminIndexView):
+    @expose('/')
+    def index(self):
+        # Busca as 20 notícias mais recentes de todos os setores
+        all_posts = Post.query.order_by(Post.timestamp.desc()).limit(20).all()
+
+        # Renderiza nosso novo template customizado, passando a lista de posts
+        return self.render('admin/custom_index.html', all_posts=all_posts)
         
 class UserForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired()])
@@ -441,7 +453,8 @@ class LinkAdminView(SecureModelView):
     form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4',
-              base_template='admin/custom_base.html')
+              base_template='admin/custom_base.html',
+              index_view=MyAdminIndexView(name='Home'))
 
 admin.add_view(UserAdminView(User, db.session, name='Usuários'))
 admin.add_view(SectorAdminView(Sector, db.session, name='Setores'))
