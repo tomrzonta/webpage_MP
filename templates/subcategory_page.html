@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>{{ subcategory_name }}</title>
+    <title>{{ subcategory.name }} - {{ sector.name }}</title>
     <style>
         body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
         .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -37,6 +37,8 @@
             box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
             z-index: 1;
             border-radius: 4px;
+            max-height: 300px; /* Adicionado para evitar listas muito longas */
+            overflow-y: auto;   /* Adicionado para permitir rolagem */
         }
 
         .dropdown-content a {
@@ -66,19 +68,21 @@
             Olá, {{ current_user.email }}! <a href="{{ url_for('logout') }}">Sair</a>
         </div>
 
-        <h1>{{ subcategory_name }}</h1>
+        <h1>{{ subcategory.name }}</h1>
         <p style="text-align: center;">Passe o mouse sobre o botão abaixo para ver os links.</p>
 
         <div class="dropdown">
-            <button class="dropdown-button">Abrir Links de {{ subcategory_name }}</button>
+            <button class="dropdown-button">Abrir Links de {{ subcategory.name }}</button>
             <div class="dropdown-content">
-                {% for key, dados in planilhas.items() %}
-                    <a href="{{ dados.url }}" target="_blank">{{ dados.nome }}</a>
+                {% for link in links %}
+                    <a href="{{ link.url }}" target="_blank">{{ link.name }}</a>
+                {% else %}
+                    <a>Nenhum link cadastrado nesta subcategoria.</a>
                 {% endfor %}
-            </div>
+                </div>
         </div>
 
-        <a href="{{ url_for('view_sector', sector_name=sector_name) }}" class="back-link">Voltar para {{ sector_name }}</a>
+        <a href="{{ url_for('view_sector_dashboard', sector_name=sector.name) }}" class="back-link">Voltar para {{ sector.name }}</a>
     </div>
 </body>
 </html>

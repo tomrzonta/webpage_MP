@@ -1,0 +1,41 @@
+{% extends 'admin/model/list.html' %}
+
+{% block body %}
+    {{ super() }} {# Renderiza a tabela padrão do Admin #}
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableBody = document.querySelector('.table tbody');
+            
+            if (tableBody) {
+                new Sortable(tableBody, {
+                    animation: 150,
+                    handle: '.drag-handle', // A "alça" que criamos no app.py
+
+                    onEnd: function (evt) {
+                        const allRows = tableBody.querySelectorAll('tr');
+                        const orderedIds = Array.from(allRows).map(row => row.querySelector('.drag-handle').dataset.id);
+                        
+                        // Aponta para a nossa nova rota de reordenar subcategorias
+                        fetch('{{ url_for("reorder_subcategories") }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ordered_ids: orderedIds }),
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status !== 'success') {
+                                alert('ERRO ao salvar a ordem: ' + data.message);
+                            }
+                        })
+                        .catch((error) => {
+                            alert('ERRO de rede ao salvar a ordem.');
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+{% endblock %}

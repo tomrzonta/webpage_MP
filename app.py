@@ -235,9 +235,33 @@ class SectorAdminView(SecureModelView):
 
 
 class SubcategoryAdminView(SecureModelView):
-    form_columns = ['name', 'sector']
-#    form_ajax_refs = { 'sector': { 'fields': ['name'] } }
+    # Aponta para o nosso novo template customizado
+    list_template = 'admin/subcategory_list.html'
+
+    # Define a ordenação padrão pela nossa nova coluna
+    column_default_sort = ('order_index', False)
+
+    # Renomeia o cabeçalho da coluna para algo mais amigável
+    column_labels = {'order_index': 'Ordem'}
+
+    # Função para criar o ícone de arrastar (a "alça")
+    def _order_formatter(view, context, model, name):
+        return Markup(f'<div class="drag-handle" style="cursor: move; text-align: center;" data-id="{model.id}">&#9776;</div>')
+
+    # Associa nossa função à coluna 'order_index'
+    column_formatters = {
+        'order_index': _order_formatter
+    }
+
+    # Define as colunas que serão exibidas na lista
+    column_list = ['order_index', 'name', 'sector']
+    
+    # Campos que aparecerão no formulário de criação/edição
+    form_columns = ['name', 'sector', 'order_index']
+    
+    # Mantém a busca e os filtros
     column_searchable_list = ['name']
+    column_filters = ['sector']
 
 
 @app.route('/api/subcategories/<int:sector_id>')
@@ -318,7 +342,30 @@ def reorder_links():
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+# Adicione esta nova rota para salvar a ordem das subcategorias
+@app.route('/api/subcategories/reorder', methods=['POST'])
+@login_required
+def reorder_subcategories():
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Permission denied'}), 403
 
+    ordered_ids = request.get_json().get('ordered_ids')
+
+    if not ordered_ids:
+        return jsonify({'status': 'error', 'message': 'No data received'}), 400
+
+    try:
+        for index, subcategory_id in enumerate(ordered_ids):
+            subcategory = db.session.get(Subcategory, int(subcategory_id))
+            if subcategory:
+                subcategory.order_index = index
+        
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Ordem das subcategorias atualizada.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 # --- ANTES da classe LinkAdminView ---
 class LinkForm(FlaskForm):
     sector = QuerySelectField(
