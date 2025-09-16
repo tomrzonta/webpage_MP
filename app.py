@@ -205,8 +205,6 @@ class PostForm(FlaskForm):
     ])
     order_index = IntegerField('Ordem', default=0)
 
-
-
 class PostAdminView(SecureModelView):
     # Usa nosso formulário customizado atualizado
     form = PostForm
