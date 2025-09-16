@@ -126,6 +126,7 @@ class Post(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
     image_filename = db.Column(db.String(100), nullable=True)
+    is_pinned = db.Column(db.Boolean, nullable=False, default=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     order_index = db.Column(db.Integer, nullable=False, default=0)
     
@@ -204,6 +205,7 @@ class PostForm(FlaskForm):
         FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Apenas imagens são permitidas!')
     ])
     order_index = IntegerField('Ordem', default=0)
+    is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
     # Usa nosso formulário customizado atualizado
@@ -228,7 +230,7 @@ class PostAdminView(SecureModelView):
     column_default_sort = ('timestamp', True)
 
     # Edição rápida na lista
-    column_editable_list = ['title', 'order_index']
+    column_editable_list = ['title', 'order_index', 'is_pinned']
 
     # Método para salvar o modelo
     def on_model_change(self, form, model, is_created):
@@ -450,6 +452,19 @@ class LinkAdminView(SecureModelView):
 
     form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
+    def edit_form(self, obj=None):
+        # Pega o formulário padrão
+        form = super(LinkAdminView, self).edit_form(obj)
+        
+        # Se estiver editando um objeto existente (obj)
+        if obj:
+            # Pré-seleciona o setor correto
+            form.sector.data = obj.subcategory.sector
+            # Pré-seleciona a subcategoria correta
+            form.subcategory.data = obj.subcategory
+            
+        return form
+
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4',
               base_template='admin/custom_base.html',
               index_view=MyAdminIndexView(name='Home'))
@@ -530,7 +545,7 @@ def view_sector_home(sector_name):
         return redirect(url_for('dashboard'))
     
     # Busca todas as postagens daquele setor, ordenadas pela data (mais nova primeiro)
-    posts = sector.posts.order_by(Post.timestamp.desc()).all()
+    posts = sector.posts.order_by(Post.is_pinned.desc(), Post.timestamp.desc()).all()
 
     return render_template('sector_home.html', current_sector=sector, posts=posts)
 
