@@ -3,9 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>Dashboard - {{ current_sector.name }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <style>
         :root { --bg-color: #f4f4f9; --sidebar-bg: #ffffff; --header-bg: #ffffff; --main-content-bg: #ffffff; --text-color: #333; --link-color: #007bff; --active-link-bg: #007bff; --active-link-text: #ffffff; --border-color: #e9ecef; }
-        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* 2. Estilos para o Modo Escuro */
+        body.dark-mode { --bg-color: #121212; --sidebar-bg: #1e1e1e; --header-bg: #1e1e1e; --main-content-bg: #1e1e1e; --text-color: #e0e0e0; --link-color: #bb86fc; --active-link-bg: #3700b3; --active-link-text: #ffffff; --border-color: #333333; }
+        .dark-mode .sector-dropdown-content { background-color: #2c2c2c; }
+        .dark-mode .sector-dropdown-content a { color: #e0e0e0; }
+        .dark-mode .link-card { background-color: #2c2c2c; }
+        .dark-mode .search-form input { background-color: #333; color: #e0e0e0; border-color: #555; }
+        .dark-mode .user-info a { color: #bb86fc !important; }
+
+        /* Estilos base */
+        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; height: 100vh; transition: background-color 0.2s, color 0.2s; }
         .header { background-color: var(--header-bg); padding: 0 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; height: 60px; flex-shrink: 0; }
         .header-left { font-weight: bold; }
         .header-right { display: flex; align-items: center; gap: 15px; }
@@ -38,6 +49,8 @@
         </div>
         <div class="header-right">
 
+            <a href="#" id="darkModeToggleUser" class="admin-button" title="Alternar Modo Escuro"><i class="fa fa-moon-o"></i></a>
+
             <a href="{{ url_for('view_sector_home', sector_name=current_sector.name) }}" class="admin-button" style="background-color: #17a2b8;">Mural de Notícias</a>
             {% if current_user.is_admin or current_user.sectors|length > 1 %}
             <div class="sector-dropdown">
@@ -51,11 +64,9 @@
                 </div>
             </div>
             {% endif %}
-
             {% if current_user.is_admin %}
-                <a href="{{ url_for('admin.index') }}" class="admin-button">Painel Admin</a>
-                {% endif %}
-            
+            <a href="{{ url_for('admin.index') }}" class="admin-button">Painel Admin</a>
+            {% endif %}
             <div class="user-info">
                 {{ current_user.email }} | 
                 <a href="{{ url_for('change_password') }}">Alterar Senha</a> | 
@@ -106,5 +117,41 @@
             {% endif %}
         </main>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleButtonUser = document.getElementById('darkModeToggleUser');
+            const body = document.body;
+
+            const enableDarkMode = () => {
+                body.classList.add('dark-mode');
+                localStorage.setItem('darkModeUser', 'enabled');
+                toggleButtonUser.innerHTML = '<i class="fa fa-sun-o"></i>';
+            };
+
+            const disableDarkMode = () => {
+                body.classList.remove('dark-mode');
+                localStorage.setItem('darkModeUser', 'disabled');
+                toggleButtonUser.innerHTML = '<i class="fa fa-moon-o"></i>';
+            };
+
+            // Verifica a preferência salva ao carregar a página
+            if (localStorage.getItem('darkModeUser') === 'enabled') {
+                enableDarkMode();
+            }
+
+            // Adiciona o evento de clique no botão
+            if(toggleButtonUser) {
+                toggleButtonUser.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (localStorage.getItem('darkModeUser') === 'enabled') {
+                        disableDarkMode();
+                    } else {
+                        enableDarkMode();
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
