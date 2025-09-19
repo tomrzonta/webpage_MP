@@ -86,6 +86,9 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    name = db.Column(db.String(120), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+    profile_image_filename = db.Column(db.String(100), nullable=True)
     sectors = db.relationship('Sector', secondary=user_sectors_association, lazy='subquery',
                               back_populates='users')
     posts = db.relationship('Post', back_populates='author', lazy=True)
@@ -413,6 +416,12 @@ class LinkForm(FlaskForm):
         blank_text='-- Selecione um Setor primeiro --'
     )
 
+class ProfileForm(FlaskForm):
+    name = StringField('Nome')
+    bio = TextAreaField('Sobre Mim / Bio')
+    image = FileField('Alterar Foto do Perfil', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg'], 'Apenas imagens (.jpg, .png, .jpeg) são permitidas!')
+    ])
 
 class LinkAdminView(SecureModelView):
     # Usa nosso formulário customizado
@@ -516,7 +525,6 @@ def change_password():
             flash('As senhas não coincidem. Tente novamente.', 'danger')
             return redirect(url_for('change_password'))
         
-        # Se tudo estiver certo, atualiza a senha
         user = current_user
         user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
         db.session.commit()
@@ -527,7 +535,31 @@ def change_password():
     return render_template('change_password.html', title='Alterar Senha')
 
 
-# --- ROTAS PRINCIPAIS DA APLICAÇÃO ---
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ProfileForm()
+
+    if form.validate_on_submit():
+        current_user.name = form.name.data
+        current_user.bio = form.bio.data
+
+        if form.image.data:
+            file = form.image.data
+            filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
+            file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
+            current_user.profile_image_filename = filename
+        
+        db.session.commit()
+        flash('Seu perfil foi atualizado com sucesso!', 'success')
+        return redirect(url_for('profile'))
+
+    # Pré-preenche o formulário com os dados atuais do usuário
+    form.name.data = current_user.name
+    form.bio.data = current_user.bio
+
+    return render_template('profile.html', title='Meu Perfil', form=form)
+
 @app.route('/')
 @login_required
 def dashboard():
