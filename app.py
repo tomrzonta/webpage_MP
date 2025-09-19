@@ -1,39 +1,39 @@
+# --- Variáveis de ambiente ---
 from dotenv import load_dotenv
 load_dotenv()
 import os
-import click
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
-from flask_bcrypt import Bcrypt
-from flask_admin import Admin
-from flask_admin.contrib.sqla import ModelView
-from flask_admin.menu import MenuLink
-from wtforms_sqlalchemy.fields import QuerySelectField
-from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField
-from wtforms.validators import DataRequired
-from flask_admin.actions import action
-from markupsafe import Markup
-from wtforms import StringField, IntegerField
-from datetime import datetime
-from flask_admin import BaseView, expose
-from wtforms import validators 
-from wtforms import StringField, validators
-from wtforms.fields import PasswordField, TextAreaField
-from wtforms.fields import BooleanField
-from wtforms_sqlalchemy.fields import QuerySelectMultipleField
-from flask_ckeditor import CKEditor
-from flask_ckeditor import CKEditorField
 import uuid
-from flask import abort
-from flask_ckeditor import CKEditor, CKEditorField, upload_success
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from datetime import datetime
+
+# --- Flask e extensões ---
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import (
+    UserMixin, LoginManager, login_user, logout_user, login_required, current_user
+)
+from flask_bcrypt import Bcrypt
+from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from werkzeug.utils import secure_filename
-from flask_admin.form.widgets import Select2Widget
-from flask_admin import BaseView, expose
+from flask_ckeditor import CKEditor, CKEditorField, upload_success
+
+# --- Flask-Admin ---
 from flask_admin import Admin, BaseView, expose, AdminIndexView
+from flask_admin.menu import MenuLink
+from flask_admin.contrib.sqla import ModelView
+from flask_admin.actions import action
+from flask_admin.form.widgets import Select2Widget
+
+# --- WTForms ---
+from wtforms import StringField, SelectField, IntegerField, validators
+from wtforms.fields import PasswordField, TextAreaField, BooleanField
+from wtforms.validators import DataRequired
+from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
+
+# --- Outros ---
+import click
+from markupsafe import Markup
+from werkzeug.utils import secure_filename
+
 
 
 
@@ -205,7 +205,7 @@ class PostForm(FlaskForm):
         get_label='name',
         validators=[DataRequired()],
         widget=Select2Widget(multiple=True),
-        render_kw={'class': 'form-control'} # <-- ADICIONE APENAS ESTA LINHA
+        render_kw={'class': 'form-control'} 
     )
     title = StringField('Título', validators=[DataRequired()])
     content = TextAreaField('Conteúdo', render_kw={'class': 'ckeditor'})
@@ -216,10 +216,8 @@ class PostForm(FlaskForm):
     is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
-    # Usa nosso formulário customizado atualizado
     form = PostForm
 
-    # Garante que o script do CKEditor seja carregado
     extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
 
     form_widget_args = {
@@ -228,19 +226,14 @@ class PostAdminView(SecureModelView):
         }
     }
 
-    # Colunas que serão exibidas na lista (com 'sectors' no plural)
     column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index']
 
-    # Filtros (com 'sectors' no plural)
     column_filters = ['sectors', 'author']
 
-    # Ordenação padrão da lista
     column_default_sort = ('timestamp', True)
 
-    # Edição rápida na lista
     column_editable_list = ['title', 'order_index', 'is_pinned']
 
-    # Método para salvar o modelo
     def on_model_change(self, form, model, is_created):
         if is_created:
             model.author_id = current_user.id
