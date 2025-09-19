@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import click
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -39,10 +41,12 @@ from flask_admin import Admin, BaseView, expose, AdminIndexView
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
 app = Flask(__name__)
-ckeditor = CKEditor(app) # <-- ADICIONE ESTA LINHA
+ckeditor = CKEditor(app) 
 basedir = os.path.abspath(os.path.dirname(__file__))
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI') or 'sqlite:///' + os.path.join(basedir, 'database.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil'
 app.config['UPLOADED_PATH'] = os.path.join(basedir, 'static', 'uploads')
@@ -171,6 +175,7 @@ class UserAdminView(SecureModelView):
         
 # Em app.py
 class MyAdminIndexView(AdminIndexView):
+    
     @expose('/')
     def index(self):
         # Busca as 20 notícias mais recentes de todos os setores

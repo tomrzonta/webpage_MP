@@ -15,3 +15,9 @@ flask create-sector "Suporte"
 # CRIAR USUÁRIO 
 
 flask create-admin
+
+
+
+# PARA GERAR UMA CHAVE MUITO BOA 
+
+python -c 'import secrets; print(secrets.token_hex(24))'
