@@ -18,7 +18,7 @@
                 Setor(es): <strong>{{ post.sectors|map(attribute='name')|join(', ') }}</strong>
               </h6>
               <h6 class="card-subtitle mb-2 text-muted">
-                Publicado por: <strong>{{ post.author.email }}</strong> em {{ post.timestamp.strftime('%d/%m/%Y às %H:%M') }}
+                Publicado por: <strong>{{ post.author.name or post.author.email }}</strong> em {{ post.timestamp.strftime('%d/%m/%Y') }}
               </h6>
               <hr>
 
