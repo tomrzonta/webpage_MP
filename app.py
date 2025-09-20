@@ -211,8 +211,6 @@ class PostForm(FlaskForm):
         render_kw={'class': 'form-control'}
     )
     title = StringField('Título', validators=[DataRequired()])
-    # --- ALTERAÇÃO PRINCIPAL AQUI ---
-    # Usando CKEditorField diretamente. Ele cuida de tudo.
     content = CKEditorField('Conteúdo', validators=[DataRequired()])
     image = FileField('Imagem de Destaque', validators=[
         FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Apenas imagens são permitidas!')
@@ -221,11 +219,10 @@ class PostForm(FlaskForm):
     is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
-    # Usa nosso formulário, que agora controla o CKEditor
     form = PostForm
 
-    # O resto da sua configuração de negócio.
-    # Note que removemos 'extra_js' e 'form_widget_args' pois são desnecessários agora.
+    extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
+
     column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index', 'is_pinned']
     column_filters = ['sectors', 'author']
     column_default_sort = ('timestamp', True)
