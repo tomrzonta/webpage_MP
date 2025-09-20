@@ -200,6 +200,7 @@ class UserForm(FlaskForm):
         allow_blank=True
     )
 
+# Em app.py
 class PostForm(FlaskForm):
     sectors = QuerySelectMultipleField(
         label='Setores',
@@ -207,10 +208,12 @@ class PostForm(FlaskForm):
         get_label='name',
         validators=[DataRequired()],
         widget=Select2Widget(multiple=True),
-        render_kw={'class': 'form-control'} 
+        render_kw={'class': 'form-control'}
     )
     title = StringField('Título', validators=[DataRequired()])
-    content = TextAreaField('Conteúdo', render_kw={'class': 'ckeditor'})
+    # --- ALTERAÇÃO PRINCIPAL AQUI ---
+    # Usando CKEditorField diretamente. Ele cuida de tudo.
+    content = CKEditorField('Conteúdo', validators=[DataRequired()])
     image = FileField('Imagem de Destaque', validators=[
         FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Apenas imagens são permitidas!')
     ])
@@ -218,29 +221,21 @@ class PostForm(FlaskForm):
     is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
+    # Usa nosso formulário, que agora controla o CKEditor
     form = PostForm
 
-    extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
-
-    form_widget_args = {
-        'sectors': {
-            'class': 'select2'
-        }
-    }
-
-    column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index']
-
+    # O resto da sua configuração de negócio.
+    # Note que removemos 'extra_js' e 'form_widget_args' pois são desnecessários agora.
+    column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index', 'is_pinned']
     column_filters = ['sectors', 'author']
-
     column_default_sort = ('timestamp', True)
-
     column_editable_list = ['title', 'order_index', 'is_pinned']
 
     def on_model_change(self, form, model, is_created):
         if is_created:
             model.author_id = current_user.id
-
-        if form.image.data:
+        
+        if 'image' in form and form.image.data:
             file = form.image.data
             filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
             file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
