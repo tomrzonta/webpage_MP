@@ -4,14 +4,65 @@
     <meta charset="UTF-8">
     <title>Mural de Notícias - {{ current_sector.name }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        :root { 
+            --bg-color: #f4f4f.9; --header-bg: #ffffff; --card-bg: #ffffff; 
+            --text-color: #333; --border-color: #dee2e6;
+        }
+        
+        /* Estilos para o Modo Escuro */
+        body.dark-mode { 
+            --bg-color: #121212; --header-bg: #1e1e1e; --card-bg: #1e1e1e; 
+            --text-color: #e8e8e8; --border-color: #333333;
+        }
+        body.dark-mode h1, body.dark-mode h4, body.dark-mode a:not(.btn) {
+            color: var(--text-color);
+        }
+        .dark-mode .card { background-color: var(--card-bg); border-color: var(--border-color); }
+        .dark-mode .header { background-color: var(--header-bg); border-bottom-color: var(--border-color); }
+        
+        /* ============== REGRA ADICIONADA/CORRIGIDA AQUI ============== */
+        .dark-mode .card-text, .dark-mode .card-text p, .dark-mode .card-subtitle {
+            color: #dcdcdc !important; /* Força o texto do post e o subtítulo a ficarem claros */
+        }
+
+        /* Estilos base */
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; transition: background-color 0.2s, color 0.2s; }
+        .header { background-color: var(--header-bg); padding: 0 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; height: 60px; margin-bottom: 2rem; }
+        .admin-button { background-color: #6c757d; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; }
+    </style>
 </head>
 <body>
+    <header class="header">
+        <div>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Voltar ao Dashboard</a>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+             <a href="#" id="darkModeToggleUser" class="admin-button" title="Alternar Modo Escuro"><i class="fa fa-moon-o"></i></a>
+            <div class="dropdown">
+                <a href="#" class="d-flex align-items-center dropdown-toggle text-decoration-none" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false" style="color: var(--text-color);">
+                    {% if current_user.profile_image_filename %}
+                        <img src="{{ url_for('static', filename='uploads/' + current_user.profile_image_filename) }}" 
+                             class="rounded-circle" style="width: 24px; height: 24px; object-fit: cover; margin-right: 8px;">
+                    {% endif %}
+                    <strong>{{ current_user.name or current_user.email }}</strong>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{{ url_for('profile') }}">Meu Perfil</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Alterar Senha</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sair</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Mural de Notícias: {{ current_sector.name }}</h1>
             <div>
                 <a href="{{ url_for('view_sector_dashboard', sector_name=current_sector.name) }}" class="btn btn-outline-primary">Ver Links do Setor</a>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Mudar de Setor</a>
             </div>
         </div>
         <hr>
@@ -32,13 +83,13 @@
                         </h6>
                         <hr>
 
-                        <div class="card-text">
-                            {{ post.content | safe }}
-                        </div>
-
                         {% if post.image_filename %}
                             <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}" class="img-fluid rounded my-3" alt="Imagem da notícia">
                         {% endif %}
+
+                        <div class="card-text">
+                            {{ post.content | safe }}
+                        </div>
                     </div>
                 </div>
             {% endfor %}
@@ -48,5 +99,19 @@
             </div>
         {% endif %}
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleButtonUser = document.getElementById('darkModeToggleUser');
+            const body = document.body;
+            const enableDarkMode = () => { body.classList.add('dark-mode'); localStorage.setItem('darkModeUser', 'enabled'); toggleButtonUser.innerHTML = '<i class="fa fa-sun-o"></i>'; };
+            const disableDarkMode = () => { body.classList.remove('dark-mode'); localStorage.setItem('darkModeUser', 'disabled'); toggleButtonUser.innerHTML = '<i class="fa fa-moon-o"></i>'; };
+            if (localStorage.getItem('darkModeUser') === 'enabled') { enableDarkMode(); }
+            if(toggleButtonUser) {
+                toggleButtonUser.addEventListener('click', (e) => { e.preventDefault(); if (localStorage.getItem('darkModeUser') === 'enabled') { disableDarkMode(); } else { enableDarkMode(); } });
+            }
+        });
+    </script>
 </body>
 </html>

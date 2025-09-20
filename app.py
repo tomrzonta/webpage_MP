@@ -40,18 +40,20 @@ from werkzeug.utils import secure_filename
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
+from dotenv import load_dotenv
+load_dotenv()
+
 app = Flask(__name__)
 ckeditor = CKEditor(app) 
 basedir = os.path.abspath(os.path.dirname(__file__))
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI') or 'sqlite:///' + os.path.join(basedir, 'database.db')
 
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'uma-chave-secreta-padrao-muito-dificil')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI') or 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil'
 app.config['UPLOADED_PATH'] = os.path.join(basedir, 'static', 'uploads')
-app.config['CKEDITOR_FILE_UPLOADER'] = 'upload' # 'upload' é o nome que daremos à nossa rota
+app.config['CKEDITOR_FILE_UPLOADER'] = 'upload'
 app.config['CKEDITOR_ENABLE_CSRF'] = True
+app.config['CKEDITOR_HTML_SANITIZER'] = False
 
 db = SQLAlchemy(app)
 
