@@ -21,15 +21,15 @@
                 Publicado por: <strong>{{ post.author.name or post.author.email }}</strong> em {{ post.timestamp.strftime('%d/%m/%Y') }}
               </h6>
               <hr>
-
-              {% if post.image_filename %}
-                <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}" class="img-fluid rounded mb-3" style="max-height: 200px; width: auto;" alt="Imagem da notícia">
-              {% endif %}
-
+              
               <div class="card-text">
-                {{ post.content | safe }}
+                  {{ post.content | safe }}
               </div>
 
+              {% if post.image_filename %}
+                  <img src="{{ url_for('static', filename='uploads/' + post.image_filename) }}" class="img-fluid rounded my-3" style="max-height: 200px; width: auto;" alt="Imagem da notícia">
+              {% endif %}
+              
               <hr>
               <a href="{{ url_for('post.edit_view', id=post.id) }}" class="btn btn-sm btn-secondary">Editar Notícia</a>
             </div>
