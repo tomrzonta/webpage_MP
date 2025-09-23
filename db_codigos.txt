@@ -21,3 +21,31 @@ flask create-admin
 # PARA GERAR UMA CHAVE MUITO BOA 
 
 python -c 'import secrets; print(secrets.token_hex(24))'
+
+
+
+
+# TEXTO DA POSTAGEM
+
+Olá a todos! Espero que esta mensagem os encontre bem. ✨
+ 
+
+É com grande satisfação que informo oficialmente a apresentação da nossa nova aplicação web! 🚀
+
+ 
+
+O nosso principal objetivo com essa ferramenta é simplificar e agilizar o nosso dia a dia, transformando o ambiente de trabalho
+
+digital em um espaço mais organizado e eficiente. 🎯
+
+Além disso, a plataforma foi pensada para melhorar a comunicação e a colaboração entre os times. 🤝
+
+As funcionalidades iniciais foram criadas para trazer um impacto direto no nosso trabalho diário, mas o verdadeiro potencial desta
+
+aplicação está no seu crescimento. O seu desenvolvimento é limitado apenas pela nossa imaginação, e posso garantir que estou longe de ver o fim da linha! ♾️
+
+ 
+
+"A imaginação é mais importante que o conhecimento. O conhecimento é limitado. A imaginação circunda o mundo."
+
+                                                                                                                                                                                               - Albert Einstein.
