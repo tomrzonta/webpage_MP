@@ -2,7 +2,7 @@
 
 deactivate
 Remove-Item -Recurse -Force venv
-python -3.11 -m venv venv
+python 3.11 -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
 
@@ -18,4 +18,10 @@ flask create-admin
 
 
 
-pyinstaller --onefile --noconsole conversor_csv_xlsx.py
+# PARA GERAR UMA CHAVE MUITO BOA 
+
+python -c 'import secrets; print(secrets.token_hex(24))'
+
+
+
+

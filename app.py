@@ -1,55 +1,63 @@
+# --- Variáveis de ambiente ---
+from dotenv import load_dotenv
+load_dotenv()
 import os
-import click
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
-from flask_bcrypt import Bcrypt
-from flask_admin import Admin
-from flask_admin.contrib.sqla import ModelView
-from flask_admin.menu import MenuLink
-from wtforms_sqlalchemy.fields import QuerySelectField
-from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField
-from wtforms.validators import DataRequired
-from flask_admin.actions import action
-from markupsafe import Markup
-from wtforms import StringField, IntegerField
-from datetime import datetime
-from flask_admin import BaseView, expose
-from wtforms import validators 
-from wtforms import StringField, validators
-from wtforms.fields import PasswordField, TextAreaField
-from wtforms.fields import BooleanField
-from wtforms_sqlalchemy.fields import QuerySelectMultipleField
-from flask_ckeditor import CKEditor
-from flask_ckeditor import CKEditorField
 import uuid
-from flask import abort
-from flask_ckeditor import CKEditor, CKEditorField, upload_success
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from datetime import datetime
+
+# --- Flask e extensões ---
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import (
+    UserMixin, LoginManager, login_user, logout_user, login_required, current_user
+)
+from flask_bcrypt import Bcrypt
+from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from werkzeug.utils import secure_filename
-from flask_admin.form.widgets import Select2Widget
-from flask_admin import BaseView, expose
+from flask_ckeditor import CKEditor, CKEditorField, upload_success
+from flask_migrate import Migrate
+
+# --- Flask-Admin ---
 from flask_admin import Admin, BaseView, expose, AdminIndexView
+from flask_admin.menu import MenuLink
+from flask_admin.contrib.sqla import ModelView
+from flask_admin.actions import action
+from flask_admin.form.widgets import Select2Widget
+
+# --- WTForms ---
+from wtforms import StringField, SelectField, IntegerField, validators
+from wtforms.fields import PasswordField, TextAreaField, BooleanField
+from wtforms.validators import DataRequired
+from wtforms_sqlalchemy.fields import QuerySelectField, QuerySelectMultipleField
+
+# --- Outros ---
+import click
+from markupsafe import Markup
+from werkzeug.utils import secure_filename
+
 
 
 
 
 
 # --- CONFIGURAÇÃO E INICIALIZAÇÃO DA APLICAÇÃO ---
+from dotenv import load_dotenv
+load_dotenv()
+
 app = Flask(__name__)
-ckeditor = CKEditor(app) # <-- ADICIONE ESTA LINHA
+ckeditor = CKEditor(app) 
 basedir = os.path.abspath(os.path.dirname(__file__))
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'uma-chave-secreta-padrao-muito-dificil')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI') or 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil'
 app.config['UPLOADED_PATH'] = os.path.join(basedir, 'static', 'uploads')
-app.config['CKEDITOR_FILE_UPLOADER'] = 'upload' # 'upload' é o nome que daremos à nossa rota
+app.config['CKEDITOR_FILE_UPLOADER'] = 'upload'
 app.config['CKEDITOR_ENABLE_CSRF'] = True
+app.config['CKEDITOR_HTML_SANITIZER'] = False
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 # --- TABELA DE ASSOCIAÇÃO ---
 user_sectors_association = db.Table('user_sectors',
@@ -60,6 +68,11 @@ user_sectors_association = db.Table('user_sectors',
 post_sectors_association = db.Table('post_sectors',
     db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True),
     db.Column('sector_id', db.Integer, db.ForeignKey('sector.id'), primary_key=True)
+)
+
+user_read_posts = db.Table('user_read_posts',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True)
 )
 
 bcrypt = Bcrypt(app)
@@ -82,9 +95,14 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    name = db.Column(db.String(120), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+    profile_image_filename = db.Column(db.String(100), nullable=True)
     sectors = db.relationship('Sector', secondary=user_sectors_association, lazy='subquery',
                               back_populates='users')
     posts = db.relationship('Post', back_populates='author', lazy=True)
+    read_posts = db.relationship('Post', secondary=user_read_posts, lazy='subquery',
+                                backref=db.backref('read_by_users', lazy=True))
 
 class Sector(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -171,6 +189,7 @@ class UserAdminView(SecureModelView):
         
 # Em app.py
 class MyAdminIndexView(AdminIndexView):
+    
     @expose('/')
     def index(self):
         # Busca as 20 notícias mais recentes de todos os setores
@@ -190,6 +209,7 @@ class UserForm(FlaskForm):
         allow_blank=True
     )
 
+# Em app.py
 class PostForm(FlaskForm):
     sectors = QuerySelectMultipleField(
         label='Setores',
@@ -197,10 +217,10 @@ class PostForm(FlaskForm):
         get_label='name',
         validators=[DataRequired()],
         widget=Select2Widget(multiple=True),
-        render_kw={'class': 'form-control'} # <-- ADICIONE APENAS ESTA LINHA
+        render_kw={'class': 'form-control'}
     )
     title = StringField('Título', validators=[DataRequired()])
-    content = TextAreaField('Conteúdo', render_kw={'class': 'ckeditor'})
+    content = CKEditorField('Conteúdo', validators=[DataRequired()])
     image = FileField('Imagem de Destaque', validators=[
         FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Apenas imagens são permitidas!')
     ])
@@ -208,36 +228,20 @@ class PostForm(FlaskForm):
     is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
-    # Usa nosso formulário customizado atualizado
     form = PostForm
 
-    # Garante que o script do CKEditor seja carregado
     extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
 
-    form_widget_args = {
-        'sectors': {
-            'class': 'select2'
-        }
-    }
-
-    # Colunas que serão exibidas na lista (com 'sectors' no plural)
-    column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index']
-
-    # Filtros (com 'sectors' no plural)
+    column_list = ['title', 'author', 'sectors', 'timestamp', 'order_index', 'is_pinned']
     column_filters = ['sectors', 'author']
-
-    # Ordenação padrão da lista
     column_default_sort = ('timestamp', True)
-
-    # Edição rápida na lista
     column_editable_list = ['title', 'order_index', 'is_pinned']
 
-    # Método para salvar o modelo
     def on_model_change(self, form, model, is_created):
         if is_created:
             model.author_id = current_user.id
-
-        if form.image.data:
+        
+        if 'image' in form and form.image.data:
             file = form.image.data
             filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
             file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
@@ -408,6 +412,12 @@ class LinkForm(FlaskForm):
         blank_text='-- Selecione um Setor primeiro --'
     )
 
+class ProfileForm(FlaskForm):
+    name = StringField('Nome')
+    bio = TextAreaField('Sobre Mim / Bio')
+    image = FileField('Alterar Foto do Perfil', validators=[
+        FileAllowed(['jpg', 'png', 'jpeg'], 'Apenas imagens (.jpg, .png, .jpeg) são permitidas!')
+    ])
 
 class LinkAdminView(SecureModelView):
     # Usa nosso formulário customizado
@@ -511,7 +521,6 @@ def change_password():
             flash('As senhas não coincidem. Tente novamente.', 'danger')
             return redirect(url_for('change_password'))
         
-        # Se tudo estiver certo, atualiza a senha
         user = current_user
         user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
         db.session.commit()
@@ -522,7 +531,31 @@ def change_password():
     return render_template('change_password.html', title='Alterar Senha')
 
 
-# --- ROTAS PRINCIPAIS DA APLICAÇÃO ---
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = ProfileForm()
+
+    if form.validate_on_submit():
+        current_user.name = form.name.data
+        current_user.bio = form.bio.data
+
+        if form.image.data:
+            file = form.image.data
+            filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
+            file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
+            current_user.profile_image_filename = filename
+        
+        db.session.commit()
+        flash('Seu perfil foi atualizado com sucesso!', 'success')
+        return redirect(url_for('profile'))
+
+    # Pré-preenche o formulário com os dados atuais do usuário
+    form.name.data = current_user.name
+    form.bio.data = current_user.bio
+
+    return render_template('profile.html', title='Meu Perfil', form=form)
+
 @app.route('/')
 @login_required
 def dashboard():
@@ -536,16 +569,13 @@ def dashboard():
 @app.route('/setor/<string:sector_name>/home')
 @login_required
 def view_sector_home(sector_name):
-    # Encontra o setor pelo nome ou retorna erro 404
     sector = Sector.query.filter_by(name=sector_name).first_or_404()
-
-    # Validação de segurança para garantir que o usuário tem acesso a este setor
-    if not current_user.is_admin and sector not in current_user.sectors:
-        flash('Você não tem permissão para acessar este setor.', 'danger')
-        return redirect(url_for('dashboard'))
-    
-    # Busca todas as postagens daquele setor, ordenadas pela data (mais nova primeiro)
     posts = sector.posts.order_by(Post.is_pinned.desc(), Post.timestamp.desc()).all()
+
+    for post in posts:
+        if post not in current_user.read_posts:
+            current_user.read_posts.append(post)
+    db.session.commit()
 
     return render_template('sector_home.html', current_sector=sector, posts=posts)
 
@@ -579,14 +609,28 @@ def view_sector_dashboard(sector_name):
         # Mostra todos os links do setor, ordenados
         links_to_show = query.order_by(Link.order_index).all()
     
+    unread_count = 0
+    # Pega todos os posts dos setores do usuário
+    user_sector_ids = [s.id for s in current_user.sectors]
+    all_posts_query = Post.query.join(Post.sectors).filter(Sector.id.in_(user_sector_ids))
+
+    # Pega os IDs dos posts que o usuário já leu
+    read_post_ids = [p.id for p in current_user.read_posts]
+
+    # Filtra para encontrar os posts que não estão na lista de lidos
+    unread_count = all_posts_query.filter(Post.id.notin_(read_post_ids)).count()
+    
     return render_template('dashboard.html',
                            sectors_for_dropdown=sectors_for_dropdown,
                            current_sector=current_sector,
                            subcategories=subcategories_for_sidebar,
                            active_subcategory_name=active_subcategory_name,
                            links_to_show=links_to_show,
-                           search_term=search_term)
+                           search_term=search_term,
+                           unread_count=unread_count)
 
+    
+    
 
 # --- COMANDOS CLI ---
 @app.cli.command('create-admin')

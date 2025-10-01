@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Ambiente Virtual
 venv/
 
@@ -7,3 +8,10 @@ __pycache__/
 
 # Banco de dados local
 database.db
+=======
+venv/
+__pycache__/
+*.pyc
+database.db
+.env
+>>>>>>> 6c83023481d3e128ab7ad6ae788751fd2216a416
