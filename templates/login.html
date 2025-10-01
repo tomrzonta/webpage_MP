@@ -8,26 +8,42 @@
             font-family: sans-serif;
             margin: 0;
             padding: 0;
-            background-image: url("{{ url_for('static', filename='background_login.png') }}");
+            background-image: url("{{ url_for('static', filename='background_login.jpg') }}");
             background-size: cover;
             background-position: center;
             min-height: 100vh;
-            overflow: hidden; /* Esconde a barra de rolagem para o efeito ficar melhor */
+            overflow: hidden;
+            
+            /* --- ALTERAÇÃO PRINCIPAL: Usando Flexbox --- */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
+        .cursor-effect {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+            z-index: 1;
+            backdrop-filter: blur(5px) contrast(1.2);
+            -webkit-backdrop-filter: blur(5px) contrast(1.2);
+        }
 
         .page-container {
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
             width: 100%;
             position: relative;
-            z-index: 2; /* Coloca o conteúdo na frente do efeito */
+            z-index: 2;
         }
-
-        /* --- TÍTULO DA APLICAÇÃO --- */
+        
         .app-title {
             text-align: center;
             color: white;
@@ -48,7 +64,7 @@
             gap: 10px;
         }
         .app-title .mp-logo {
-            background-color: #ff8c00; /* Cor laranja do seu logo */
+            background-color: #ff8c00;
             color: white;
             border-radius: 50%;
             width: 30px;
@@ -59,7 +75,6 @@
             font-weight: bold;
             font-size: 0.8em;
         }
-        /* --- FIM DO TÍTULO --- */
 
         .login-container {
             padding: 40px;
@@ -73,7 +88,6 @@
             color: white;
         }
         
-        /* ... (resto do seu CSS do formulário que já está bom) ... */
         .login-container h2 { text-align: center; margin-bottom: 20px; font-weight: 300; }
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
