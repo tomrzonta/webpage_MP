@@ -2,6 +2,7 @@
 
 {% block head %}
     {{ super() }}
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.png') }}">
     <style>
         /* Força os itens do Select2 a ficarem lado a lado */
         .select2-selection--multiple .select2-selection__choice {

@@ -2,6 +2,8 @@
 
 {% block tail %}
     {{ super() }}
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.png') }}">
+    
     <script>
         // Espera a instância do CKEditor ser criada
         CKEDITOR.on('instanceReady', function(ev) {
