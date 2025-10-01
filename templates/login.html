@@ -12,7 +12,7 @@
             background-size: cover;
             background-position: center;
             min-height: 100vh;
-            overflow: hidden;
+            overflow: hidden; /* Garante que não apareçam barras de rolagem indesejadas */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -26,21 +26,29 @@
             width: 100%;
             position: relative;
             z-index: 2;
+            /* Adiciona um padding vertical para garantir espaço para o conteúdo */
+            padding: 20px 0; 
+            box-sizing: border-box; /* Garante que o padding não aumente a altura total */
         }
         
         .app-title {
             text-align: center;
             color: white;
-            margin-bottom: 40px;
+            /* Margem inferior ajustada para economizar espaço */
+            margin-bottom: 25px; /* Era 40px, agora 25px */
             text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            /* Garante que o título não fique muito largo em telas pequenas */
+            max-width: 90%; 
         }
         .app-title h1 {
-            font-size: 4rem;
+            /* Tamanho da fonte responsivo */
+            font-size: 3.5rem; /* Era 4rem, agora 3.5rem como padrão */
             font-weight: bold;
             margin: 0;
         }
         .app-title p {
-            font-size: 1.5rem;
+            /* Tamanho da fonte responsivo */
+            font-size: 1.3rem; /* Era 1.5rem, agora 1.3rem como padrão */
             font-weight: 300;
             display: flex;
             align-items: center;
@@ -60,6 +68,37 @@
             font-size: 0.8em;
         }
 
+        /* --- MEDIA QUERIES para Responsividade --- */
+        @media (max-width: 768px) {
+            .app-title h1 {
+                font-size: 2.5rem; /* Fonte menor em telas menores */
+            }
+            .app-title p {
+                font-size: 1rem; /* Fonte menor em telas menores */
+            }
+            .app-title .mp-logo {
+                width: 25px;
+                height: 25px;
+                font-size: 0.7em;
+            }
+            .login-container {
+                min-width: unset; /* Remove min-width em telas pequenas */
+                width: 90%; /* Ajusta a largura do container de login */
+                padding: 30px; /* Reduz o padding */
+            }
+        }
+
+        @media (max-height: 700px) { /* Para alturas de tela menores (notebooks pequenos, por exemplo) */
+             .app-title {
+                margin-bottom: 15px; /* Reduz a margem inferior do título */
+            }
+            .login-container {
+                padding: 30px; /* Reduz o padding do container de login */
+            }
+        }
+        /* --- FIM DAS MEDIA QUERIES --- */
+
+
         .login-container {
             padding: 40px;
             border-radius: 10px;
@@ -70,6 +109,7 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
             min-width: 350px;
             color: white;
+            box-sizing: border-box; /* Garante que padding não aumente a largura total */
         }
         
         .login-container h2 { text-align: center; margin-bottom: 20px; font-weight: 300; }
