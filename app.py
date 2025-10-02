@@ -174,6 +174,7 @@ class UserAdminView(SecureModelView):
     
     # EXCLUI o campo 'password_hash' do formulário para evitar conflitos
     form_excluded_columns = ['password_hash']
+    column_searchable_list = ['email']
 
     # Adiciona nosso campo de senha temporário ao formulário
     form_extra_fields = {
