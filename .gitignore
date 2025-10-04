@@ -7,7 +7,7 @@ __pycache__/
 *.pyc
 
 # Banco de dados local
-# database.db
+database.db
 =======
 venv/
 __pycache__/

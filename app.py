@@ -5,6 +5,8 @@ import os
 import uuid
 from datetime import datetime
 import requests
+from markdownify import markdownify
+from discord_webhook import DiscordWebhook, DiscordEmbed
 
 # --- Flask e extensões ---
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
@@ -190,45 +192,52 @@ class Webhook(db.Model):
         return self.name
     
 def send_discord_notification(post):
-    """Envia uma notificação para os webhooks associados aos setores do post."""
+    """Envia uma notificação rica para os webhooks associados aos setores do post."""
     
-    # Coleta todas as URLs de webhook únicas associadas aos setores deste post
     webhook_urls = set()
     for sector in post.sectors:
         for webhook in sector.webhooks:
             webhook_urls.add(webhook.url)
 
     if not webhook_urls:
-        return # Se não há webhooks para notificar, não faz nada
+        return
 
-    # Monta a mensagem bonita (embed do Discord)
-    embed = {
-        "content": "Uma nova notícia foi publicada!",
-        "embeds": [{
-            "title": post.title,
-            "description": f"Publicado por: **{post.author.name or post.author.email}**",
-            "color": 3447003, # Uma cor azul
-            "fields": [
-                {
-                    "name": "Setores",
-                    "value": ", ".join([s.name for s in post.sectors])
-                }
-            ],
-            "timestamp": post.timestamp.isoformat()
-        }]
-    }
+    # Converte o conteúdo HTML do post para Markdown
+    markdown_content = markdownify(post.content)
+    if len(markdown_content) > 1024:
+        markdown_content = markdown_content[:1021] + '...'
 
-    # Se a notícia tiver uma imagem, adiciona à notificação
+    # Cria o link para a página da notícia
+    try:
+        # A flag _external=True é crucial para gerar a URL completa
+        post_url = url_for('view_sector_home', sector_name=post.sectors[0].name, _external=True)
+    except:
+        post_url = "https://codilink.multipedidos.com.br"
+
+
+    # Monta o embed usando a nova biblioteca
+    embed = DiscordEmbed(
+        title=f"📢 {post.title}",
+        description=markdown_content,
+        color='007bff' # Cor azul
+    )
+    embed.set_author(name=f"Publicado por: {post.author.name or post.author.email}")
+    embed.set_timestamp(timestamp=post.timestamp)
+    embed.add_embed_field(name="Setores", value=", ".join([s.name for s in post.sectors]))
+    embed.set_url(url=post_url)
+
+    # Se a notícia tiver uma imagem, anexa à notificação
     if post.image_filename:
-        image_url = url_for('static', filename='uploads/' + post.image_filename, _external=True)
-        embed['embeds'][0]['image'] = {'url': image_url}
+        image_url = f"https://codilink.multipedidos.com.br/static/uploads/{post.image_filename}"
+        embed.set_image(url=image_url)
 
     # Envia a notificação para cada URL de webhook encontrada
     for url in webhook_urls:
         try:
-            requests.post(url, json=embed)
-        except requests.exceptions.RequestException as e:
-            # Em um projeto real, aqui registraríamos o erro em um log
+            webhook = DiscordWebhook(url=url)
+            webhook.add_embed(embed)
+            webhook.execute()
+        except Exception as e:
             print(f"Erro ao enviar notificação para {url}: {e}")
 
 # --- CONFIGURAÇÃO DO PAINEL ADMIN ---
