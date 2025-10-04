@@ -4,6 +4,7 @@ load_dotenv()
 import os
 import uuid
 from datetime import datetime
+import requests
 
 # --- Flask e extensões ---
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
@@ -75,6 +76,11 @@ user_read_posts = db.Table('user_read_posts',
     db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True)
 )
 
+webhook_sectors_association = db.Table('webhook_sectors',
+    db.Column('webhook_id', db.Integer, db.ForeignKey('webhook.id'), primary_key=True),
+    db.Column('sector_id', db.Integer, db.ForeignKey('sector.id'), primary_key=True)
+)
+
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -113,6 +119,8 @@ class Sector(db.Model):
                             back_populates='sectors')
     posts = db.relationship('Post', secondary=post_sectors_association, lazy='dynamic',
                             back_populates='sectors')
+    webhooks = db.relationship('Webhook', secondary=webhook_sectors_association, lazy='subquery',
+                               back_populates='sectors')
     def __str__(self):
         return self.name
 
@@ -158,6 +166,70 @@ class Post(db.Model):
     
     def __repr__(self):
         return f'<Post {self.title}>'
+    
+class WebhookForm(FlaskForm):
+    name = StringField('Nome', validators=[DataRequired()])
+    url = StringField('URL do Webhook', validators=[DataRequired()])
+    sectors = QuerySelectMultipleField(
+        label='Setores Associados',
+        query_factory=lambda: Sector.query.order_by('name').all(),
+        get_label='name',
+        allow_blank=True,
+        widget=Select2Widget(multiple=True),
+        render_kw={'class': 'form-control'}
+    )
+    
+class Webhook(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    url = db.Column(db.String(255), unique=True, nullable=False)
+    sectors = db.relationship('Sector', secondary=webhook_sectors_association, lazy='subquery',
+                              back_populates='webhooks')
+
+    def __str__(self):
+        return self.name
+    
+def send_discord_notification(post):
+    """Envia uma notificação para os webhooks associados aos setores do post."""
+    
+    # Coleta todas as URLs de webhook únicas associadas aos setores deste post
+    webhook_urls = set()
+    for sector in post.sectors:
+        for webhook in sector.webhooks:
+            webhook_urls.add(webhook.url)
+
+    if not webhook_urls:
+        return # Se não há webhooks para notificar, não faz nada
+
+    # Monta a mensagem bonita (embed do Discord)
+    embed = {
+        "content": "Uma nova notícia foi publicada!",
+        "embeds": [{
+            "title": post.title,
+            "description": f"Publicado por: **{post.author.name or post.author.email}**",
+            "color": 3447003, # Uma cor azul
+            "fields": [
+                {
+                    "name": "Setores",
+                    "value": ", ".join([s.name for s in post.sectors])
+                }
+            ],
+            "timestamp": post.timestamp.isoformat()
+        }]
+    }
+
+    # Se a notícia tiver uma imagem, adiciona à notificação
+    if post.image_filename:
+        image_url = url_for('static', filename='uploads/' + post.image_filename, _external=True)
+        embed['embeds'][0]['image'] = {'url': image_url}
+
+    # Envia a notificação para cada URL de webhook encontrada
+    for url in webhook_urls:
+        try:
+            requests.post(url, json=embed)
+        except requests.exceptions.RequestException as e:
+            # Em um projeto real, aqui registraríamos o erro em um log
+            print(f"Erro ao enviar notificação para {url}: {e}")
 
 # --- CONFIGURAÇÃO DO PAINEL ADMIN ---
 class SecureModelView(ModelView):
@@ -167,28 +239,32 @@ class SecureModelView(ModelView):
         flash('Você precisa ser um administrador para acessar esta página.', 'danger')
         return redirect(url_for('login'))
 
-# Substitua sua UserAdminView atual por esta versão
+
 class UserAdminView(SecureModelView):
-    # Colunas que aparecem na TELA DE LISTAGEM
-    column_list = ['email', 'is_admin', 'sectors']
     
-    # EXCLUI o campo 'password_hash' do formulário para evitar conflitos
+    column_list = ['email', 'is_admin', 'sectors']
     form_excluded_columns = ['password_hash']
     column_searchable_list = ['email']
-
-    # Adiciona nosso campo de senha temporário ao formulário
     form_extra_fields = {
         'password': PasswordField('Nova Senha [Deixe em branco para não alterar]')
     }
 
-    # Intercepta o processo de salvar para criptografar a senha (versão segura)
     def on_model_change(self, form, model, is_created):
         if form.password.data:
             model.password_hash = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
         elif is_created and not form.password.data:
             raise validators.ValidationError('O campo "Nova Senha" é obrigatório ao criar um novo usuário.')
         
-# Em app.py
+class WebhookAdminView(SecureModelView):
+    # Usa nosso formulário customizado
+    form = WebhookForm
+
+    # Colunas que serão exibidas na lista de webhooks
+    column_list = ('name', 'url', 'sectors')
+    
+    # Adiciona um campo de busca pelo nome
+    column_searchable_list = ('name',)
+        
 class MyAdminIndexView(AdminIndexView):
     
     @expose('/')
@@ -247,6 +323,10 @@ class PostAdminView(SecureModelView):
             filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
             file.save(os.path.join(app.config['UPLOADED_PATH'], filename))
             model.image_filename = filename
+
+    def after_model_change(self, form, model, is_created):
+        if is_created:
+            send_discord_notification(model)
 
 
 
@@ -485,6 +565,7 @@ admin.add_view(SectorAdminView(Sector, db.session, name='Setores'))
 admin.add_view(SubcategoryAdminView(Subcategory, db.session, name='Subcategorias'))
 admin.add_view(LinkAdminView(Link, db.session, name='Links'))
 admin.add_view(PostAdminView(Post, db.session, name='Notícias'))
+admin.add_view(WebhookAdminView(Webhook, db.session, name='Webhooks'))
 admin.add_link(MenuLink(name='Voltar para a Aplicação', category='', url='/'))
 
 
