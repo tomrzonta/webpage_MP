@@ -19,6 +19,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from flask_ckeditor import CKEditor, CKEditorField, upload_success
 from flask_migrate import Migrate
+from flask_babel import Babel
 
 # --- Flask-Admin ---
 from flask_admin import Admin, BaseView, expose, AdminIndexView
@@ -48,6 +49,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+app.config['BABEL_DEFAULT_LOCALE']= 'pt_BR'
+babel = Babel(app)
 ckeditor = CKEditor(app) 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -250,9 +253,19 @@ class SecureModelView(ModelView):
 
 
 class UserAdminView(SecureModelView):
+    column_labels = {
+        'email': 'E-mail',
+        'is_admin': 'É Admin?',
+        'sectors': 'Setores'
+    }
+    form_labels = {
+        'email': 'Endereço de E-mail',
+        'is_admin': 'Usuário Administrador',
+        'sectors': 'Setores com Acesso'
+    }
     
     column_list = ['email', 'is_admin', 'sectors']
-    form_excluded_columns = ['password_hash']
+    form_excluded_columns = ['password_hash', 'posts', 'read_posts', 'name', 'bio', 'profile_image_filename']
     column_searchable_list = ['email']
     form_extra_fields = {
         'password': PasswordField('Nova Senha [Deixe em branco para não alterar]')
@@ -265,13 +278,20 @@ class UserAdminView(SecureModelView):
             raise validators.ValidationError('O campo "Nova Senha" é obrigatório ao criar um novo usuário.')
         
 class WebhookAdminView(SecureModelView):
-    # Usa nosso formulário customizado
     form = WebhookForm
-
-    # Colunas que serão exibidas na lista de webhooks
-    column_list = ('name', 'url', 'sectors')
     
-    # Adiciona um campo de busca pelo nome
+    column_labels = {
+        'name': 'Nome',
+        'url': 'URL do Webhook',
+        'sectors': 'Setores Associados'
+    }
+    form_labels = {
+        'name': 'Nome (ex: Avisos de Vendas)',
+        'url': 'URL do Webhook (copiado do Discord)',
+        'sectors': 'Enviar notificações para estes Setores'
+    }
+
+    column_list = ('name', 'url', 'sectors')
     column_searchable_list = ('name',)
         
 class MyAdminIndexView(AdminIndexView):
@@ -314,6 +334,25 @@ class PostForm(FlaskForm):
     is_pinned = BooleanField('Fixar no Topo?')
 
 class PostAdminView(SecureModelView):
+    column_labels = {
+        'title': 'Título',
+        'author': 'Autor',
+        'sectors': 'Setores',
+        'timestamp': 'Data de Publicação',
+        'order_index': 'Ordem',
+        'is_pinned': 'Fixo?'
+    }
+    
+    # Dicionário de tradução para os campos do formulário
+    form_labels = {
+        'sectors': 'Publicar nos Setores',
+        'title': 'Título da Notícia',
+        'content': 'Conteúdo Completo',
+        'image': 'Imagem de Destaque',
+        'order_index': 'Ordem de Exibição',
+        'is_pinned': 'Fixar no Topo do Mural?'
+    }
+
     form = PostForm
 
     extra_js = ['//cdn.ckeditor.com/4.22.1/full/ckeditor.js']
@@ -342,6 +381,8 @@ class PostAdminView(SecureModelView):
 # --- FIM DO BLOCO PARA COPIAR ---
 
 class SectorAdminView(SecureModelView):
+    column_labels = {'order_index': 'Ordem', 'name': 'Nome do Setor', 'subcategories': 'Subcategorias'}
+    form_labels = { 'name': 'Nome do Setor','order_index': 'Ordem de Exibição'}
     can_create = True
     column_list = ['name', 'subcategories']
     column_searchable_list = ['name']
@@ -351,31 +392,23 @@ class SectorAdminView(SecureModelView):
 
 
 class SubcategoryAdminView(SecureModelView):
-    # Aponta para o nosso novo template customizado
-    list_template = 'admin/subcategory_list.html'
+    # Mantenha apenas esta definição completa
+    column_labels = {'order_index': 'Ordem', 'name': 'Nome da Subcategoria', 'sector': 'Setor'}
+    form_labels = {'name': 'Nome', 'sector': 'Setor', 'order_index': 'Ordem'}
 
-    # Define a ordenação padrão pela nossa nova coluna
+    # O resto da sua configuração
+    list_template = 'admin/subcategory_list.html'
     column_default_sort = ('order_index', False)
 
-    # Renomeia o cabeçalho da coluna para algo mais amigável
-    column_labels = {'order_index': 'Ordem'}
-
-    # Função para criar o ícone de arrastar (a "alça")
     def _order_formatter(view, context, model, name):
         return Markup(f'<div class="drag-handle" style="cursor: move; text-align: center;" data-id="{model.id}">&#9776;</div>')
 
-    # Associa nossa função à coluna 'order_index'
     column_formatters = {
         'order_index': _order_formatter
     }
 
-    # Define as colunas que serão exibidas na lista
     column_list = ['order_index', 'name', 'sector']
-    
-    # Campos que aparecerão no formulário de criação/edição
     form_columns = ['name', 'sector', 'order_index']
-    
-    # Mantém a busca e os filtros
     column_searchable_list = ['name']
     column_filters = ['sector']
 
@@ -385,38 +418,30 @@ class SubcategoryAdminView(SecureModelView):
 def api_subcategories(sector_id):
     subcategories = Subcategory.query.filter_by(sector_id=sector_id).all()
     
-    # Transforma a lista de objetos em um formato que o JavaScript entende (JSON)
     subcat_list = [{'id': sub.id, 'name': sub.name} for sub in subcategories]
     
     return jsonify(subcat_list)
 
-# --- ROTA PARA UPLOAD DE IMAGENS DO CKEDITOR ---
+
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
-    # Garante que apenas administradores possam fazer upload
     if not current_user.is_admin:
         abort(403)
 
-    # Pega o arquivo enviado pelo CKEditor
+
     f = request.files.get('upload')
     if f is None:
         return jsonify({'error': {'message': 'Nenhum arquivo enviado.'}}), 400
 
-    # Gera um nome de arquivo seguro e único
     extension = os.path.splitext(f.filename)[1].lower()
     if extension not in ['.jpg', '.gif', '.png', '.jpeg']:
         return jsonify({'error': {'message': 'Tipo de arquivo de imagem inválido.'}}), 400
         
     filename = str(uuid.uuid4()) + extension
-    
-    # Salva o arquivo na nossa pasta de uploads
     f.save(os.path.join(app.config['UPLOADED_PATH'], filename))
-    
-    # Gera a URL pública para a imagem
     url = url_for('static', filename=f'uploads/{filename}')
     
-    # Retorna a resposta JSON no formato que o CKEditor espera
     return jsonify({'uploaded': 1, 'fileName': filename, 'url': url})
 
 # Ação de reset de senha
@@ -459,7 +484,7 @@ def reorder_links():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
     
-# Adicione esta nova rota para salvar a ordem das subcategorias
+
 @app.route('/api/subcategories/reorder', methods=['POST'])
 @login_required
 def reorder_subcategories():
@@ -482,8 +507,20 @@ def reorder_subcategories():
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
-# --- ANTES da classe LinkAdminView ---
+
 class LinkForm(FlaskForm):
+    column_labels = {
+        'name': 'Nome',
+        'url': 'URL',
+        'subcategory': 'Subcategoria',
+        'order_index': 'Ordem'
+    }
+    form_labels = {
+        'name': 'Nome do Link',
+        'url': 'Endereço (URL)',
+        'subcategory': 'Subcategoria',
+        'order_index': 'Ordem de Exibição'
+    }
     sector = QuerySelectField(
         label='Setor',
         query_factory=lambda: Sector.query.all(),
@@ -510,59 +547,40 @@ class ProfileForm(FlaskForm):
     ])
 
 class LinkAdminView(SecureModelView):
-    # Usa nosso formulário customizado
+    # Mantenha apenas esta definição completa
+    column_labels = {'order_index': 'Ordem', 'name': 'Nome do Link', 'url': 'URL', 'subcategory': 'Subcategoria'}
+    form_labels = {'sector': 'Setor', 'order_index': 'Ordem', 'name': 'Nome', 'url': 'URL', 'subcategory': 'Subcategoria'}
+    
+    # O resto da sua configuração
     form = LinkForm
     
-    # Aponta para os templates de criação/edição/lista
     create_template = 'admin/link_create.html'
     edit_template = 'admin/link_edit.html'
     list_template = 'admin/link_list.html'
     
-    # Ordenação padrão da lista
     column_default_sort = ('order_index', False)
 
-    # NOVO: Define um nome amigável para a coluna. Esta é a forma correta.
-    column_labels = {'order_index': 'Ordem'}
-
-    # Função para criar o HTML do ícone de arrastar
     def _order_formatter(view, context, model, name):
-        # O ícone 'hamburger' (☰) serve como a alça visual
         return Markup(f'<div class="drag-handle" style="cursor: move; text-align: center;" data-id="{model.id}">&#9776;</div>')
 
-    # Diz ao Admin para usar nossa função para formatar a coluna 'order_index'
     column_formatters = {
         'order_index': _order_formatter
     }
 
-    # AJUSTADO: Usa o nome simples da coluna na lista
     column_list = ['order_index', 'name', 'url', 'subcategory']
     
-    # Especifica quais campos aparecem no formulário de edição/criação
     form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
-    # Adiciona um painel de filtros na lateral da lista
     column_filters = [
-        # Filtro baseado no relacionamento com Subcategoria e depois com Setor
         'subcategory.sector', 
-        
-        # Filtro baseado diretamente no relacionamento com Subcategoria
         'subcategory'
     ]
-    # --- FIM DO BLOCO ---
-
-    form_columns = ['sector', 'order_index', 'name', 'url', 'subcategory']
 
     def edit_form(self, obj=None):
-        # Pega o formulário padrão
         form = super(LinkAdminView, self).edit_form(obj)
-        
-        # Se estiver editando um objeto existente (obj)
         if obj:
-            # Pré-seleciona o setor correto
             form.sector.data = obj.subcategory.sector
-            # Pré-seleciona a subcategoria correta
             form.subcategory.data = obj.subcategory
-            
         return form
 
 admin = Admin(app, name='Painel de Controle', template_mode='bootstrap4',
