@@ -1,24 +1,10 @@
-# CRIAR SETOR
-
-flask create-sector "Suporte"
-
-# CRIAR USUÁRIO 
-
-flask create-admin
-
-
 
 # PARA GERAR UMA CHAVE MUITO BOA 
 
 python -c 'import secrets; print(secrets.token_hex(24))'
 
 
-
-
-Remove-Item -Recurse -Force venv
-
-py -3.11 -m venv venv
-
-.\venv\Scripts\activate
-
-pip install -r requirements.txt
+# UNTRACKEAR ARQUIVOS
+git rm -r --cached .
+git add .
+git commit
