@@ -12,6 +12,6 @@ database.db
 venv/
 __pycache__/
 *.pyc
-database.db
+#database.db
 .env
 >>>>>>> 6c83023481d3e128ab7ad6ae788751fd2216a416
