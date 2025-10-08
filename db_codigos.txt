@@ -1,13 +1,3 @@
-# CÓDIGO PARA LIDAR COM ERRO NO AMBIENTE VIRTUAL DE REPOSITÓRIO BAIXADO
-
-deactivate
-Remove-Item -Recurse -Force venv
-python 3.11 -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
-
-
-
 # CRIAR SETOR
 
 flask create-sector "Suporte"

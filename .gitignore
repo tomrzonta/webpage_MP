@@ -6,8 +6,8 @@ __pycache__/
 *.pyc
 
 # Banco de dados local (não comentar esta linha)
-#database.db
-#instance/
+database.db
+instance/
 
 # Arquivo de segredos
 .env
